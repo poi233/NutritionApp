@@ -9,4 +9,12 @@ export interface Recipe {
   name: string;
   ingredients: Ingredient[];
   weekStartDate: string; // ISO string (yyyy-MM-dd) representing the start of the week
+  dayOfWeek: string; // e.g., "Monday", "Tuesday"
+  mealType: string; // e.g., "Breakfast", "Lunch", "Dinner"
+  // Optional nutritional info (can be calculated/estimated)
+  calories?: number;
+  protein?: number;
+  fat?: number;
+  carbohydrates?: number;
+  description?: string; // Optional description added for generated recipes
 }

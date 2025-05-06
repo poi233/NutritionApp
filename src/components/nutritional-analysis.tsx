@@ -14,12 +14,13 @@ interface NutritionalAnalysisProps {
   weekStartDate: string; // ISO string date for the start of the week
 }
 
-// Helper to format chart data
+// Helper to format chart data - uses contextual name from analysis
 const formatChartData = (analysis: AnalyzeNutritionalBalanceOutput) => {
   return analysis.analyzedRecipes.map(recipe => ({
+    // Use the name provided by the analysis (which includes context)
     // Truncate long names for better chart display
-    name: recipe.name.length > 15 ? `${recipe.name.substring(0, 12)}...` : recipe.name,
-    // Include full name in tooltip payload if needed later
+    name: recipe.name.length > 25 ? `${recipe.name.substring(0, 22)}...` : recipe.name,
+    // Store the full name for the tooltip
     fullName: recipe.name,
     Calories: parseFloat(recipe.totalCalories.toFixed(0)),
     Protein: parseFloat(recipe.totalProtein.toFixed(1)),
@@ -28,13 +29,14 @@ const formatChartData = (analysis: AnalyzeNutritionalBalanceOutput) => {
   }));
 };
 
-// Custom Tooltip Content
+// Custom Tooltip Content - Displays the full name from payload
 const CustomTooltip: FC<any> = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload; // Get the full data object for the bar
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">
-        <p className="mb-1 font-medium">{data.fullName || label}</p> {/* Show full name */}
+        {/* Show full name from the data payload */}
+        <p className="mb-1 font-medium">{data.fullName || label}</p>
         {payload.map((entry: any, index: number) => (
            <p key={`item-${index}`} className="text-sm" style={{ color: entry.color }}>
              {`${entry.name}: ${entry.value?.toLocaleString()}${entry.name === 'Calories' ? '' : 'g'}`}
@@ -72,16 +74,42 @@ export const NutritionalAnalysis: FC<NutritionalAnalysisProps> = ({ analysis, is
   }
 
   if (!analysis) {
-    return null; // Don't render anything if no analysis is available yet
+     // Optional: Show a placeholder if no analysis has been run yet
+     return (
+       <Card className="mt-8 shadow-md border-dashed border-muted-foreground/50">
+         <CardHeader>
+           <CardTitle className="text-lg text-muted-foreground">Nutritional Analysis</CardTitle>
+           <CardDescription>Add meals with ingredients and click 'Analyze Nutrition' to see insights.</CardDescription>
+         </CardHeader>
+         <CardContent>
+            <p className="text-sm text-muted-foreground text-center py-4">No analysis data available.</p>
+         </CardContent>
+       </Card>
+     );
   }
+
+   // Only render the full analysis if there are insights
+   if (!analysis.nutritionalInsights) {
+       return (
+         <Card className="mt-8 shadow-md">
+           <CardHeader>
+             <CardTitle>Nutritional Analysis</CardTitle>
+             <CardDescription>Week starting {weekDisplay}</CardDescription>
+           </CardHeader>
+           <CardContent>
+              <p className="text-sm text-muted-foreground">Could not generate nutritional insights.</p>
+           </CardContent>
+         </Card>
+       );
+   }
 
   const chartData = formatChartData(analysis);
 
   return (
     <Card className="mt-8 shadow-md">
       <CardHeader>
-        <CardTitle>Nutritional Analysis</CardTitle>
-        <CardDescription>Insights for week starting {weekDisplay}.</CardDescription>
+        <CardTitle>Weekly Nutritional Analysis</CardTitle>
+        <CardDescription>Insights for week starting {weekDisplay} based on meals with ingredients.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div>
@@ -109,21 +137,21 @@ export const NutritionalAnalysis: FC<NutritionalAnalysisProps> = ({ analysis, is
         <Separator className="my-6" />
 
         <div>
-          <h3 className="text-lg font-semibold mb-4">Recipe Breakdown (per serving/recipe)</h3>
+          <h3 className="text-lg font-semibold mb-4">Analyzed Meal Breakdown</h3>
            {chartData.length > 0 ? (
-             <div className="h-[300px] w-full">
+             <div className="h-[350px] w-full"> {/* Increased height slightly */}
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 20 }}> {/* Adjusted margins */}
+                <BarChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 70 }}> {/* Adjusted margins */}
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  {/* Increased angle and interval for better readability */}
+                  {/* Increased angle, interval, and height for better readability */}
                   <XAxis
-                     dataKey="name"
-                     fontSize={10}
+                     dataKey="name" // This now includes day/meal context
+                     fontSize={9} // Slightly smaller font
                      tickLine={false}
                      axisLine={false}
-                     angle={-40} // Angle ticks
+                     angle={-55} // More angle
                      textAnchor="end" // Anchor angled text
-                     height={50} // Increase height for angled text
+                     height={70} // Increase height significantly for angled text
                      interval={0} // Show all labels if possible
                    />
                   <YAxis fontSize={10} tickLine={false} axisLine={false} />
@@ -131,7 +159,7 @@ export const NutritionalAnalysis: FC<NutritionalAnalysisProps> = ({ analysis, is
                     content={<CustomTooltip />}
                     cursor={{ fill: 'hsl(var(--muted))' }}
                    />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} /> {/* Added padding */}
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '15px' }} /> {/* Added more padding */}
                   {/* Use distinct colors from theme */}
                   <Bar dataKey="Calories" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Protein" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
@@ -141,11 +169,9 @@ export const NutritionalAnalysis: FC<NutritionalAnalysisProps> = ({ analysis, is
               </ResponsiveContainer>
              </div>
             ) : (
-                <p className="text-sm text-muted-foreground">No recipe data to display in the chart.</p>
+                <p className="text-sm text-muted-foreground">No meals with ingredients were analyzed to display in the chart.</p>
             )}
         </div>
-
-
       </CardContent>
     </Card>
   );
