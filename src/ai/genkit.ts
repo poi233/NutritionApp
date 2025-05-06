@@ -38,7 +38,7 @@ try {
   console.error("[Genkit Init Error] Error initializing Google AI plugin:", error);
 }
 
-export const ai = genkit({
+export let ai = genkit({
   plugins: [
     googleAIPlugin,
      // defineDotprompt({ dir: path.join(__dirname, "../prompts") }), // Example if using .prompt files
