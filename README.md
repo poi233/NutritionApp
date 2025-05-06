@@ -2,14 +2,25 @@
 
 This is a Next.js application built with Firebase IDX that helps you plan your weekly meals, track recipes, and analyze their nutritional balance using AI.
 
+![Weekly Meal Planner Interface](https://picsum.photos/600/300)
+<p align="center" data-ai-hint="weekly planner"><em>Figure 1: The weekly meal planner interface.</em></p>
+
 ## Features
 
-*   **Weekly Planner:** Visualize your meals for the week (Monday-Sunday, Breakfast-Snack).
+*   **Weekly Planner:** Visualize your meals for the week (Monday-Sunday, Breakfast-Dinner).
+    ![Planner Detail](https://picsum.photos/300/200)
+    <p align="center" data-ai-hint="meal grid"><em>Figure 2: Meal card detail in the planner.</em></p>
 *   **Recipe Management:** Add, view, and delete meals with ingredients and quantities.
+    ![Add Recipe Form](https://picsum.photos/400/250)
+    <p align="center" data-ai-hint="recipe form"><em>Figure 3: Adding a new meal via the form.</em></p>
 *   **Nutritional Estimation:** Automatically estimates calories, protein, fat, and carbs for recipes with ingredients (using a basic placeholder service).
 *   **AI-Powered Nutritional Analysis:** Get insights into the overall balance and macronutrient ratio of your weekly meals.
+    ![Nutritional Analysis Chart](https://picsum.photos/400/250)
+    <p align="center" data-ai-hint="nutrition chart"><em>Figure 4: AI-generated nutritional analysis and breakdown.</em></p>
 *   **AI-Powered Meal Generation:** Generate diverse meal ideas based on your dietary needs and preferences, considering previous meals.
 *   **Preference Management:** Save your dietary needs and food preferences.
+    ![Preferences Form](https://picsum.photos/300/200)
+    <p align="center" data-ai-hint="user preferences"><em>Figure 5: User preferences input form.</em></p>
 *   **Local Storage:** Your meal plans and preferences are saved in your browser.
 
 ## Getting Started
@@ -35,15 +46,12 @@ This is a Next.js application built with Firebase IDX that helps you plan your w
     ```
 
 3.  **Set up Environment Variables:**
-    *   Copy the example environment file:
-        ```bash
-        cp .env.example .env
-        ```
+    *   Create a `.env` file in the root directory (or copy `.env.example` if it exists).
     *   Open the `.env` file in your editor.
     *   **Obtain a Google AI API Key:** Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and create an API key.
     *   **Add the API Key to `.env`:** Replace `YOUR_API_KEY_HERE` with your actual Google AI API key:
         ```env
-        GOOGLE_API_KEY=PASTE_YOUR_ACTUAL_API_KEY_HERE
+        GOOGLE_API_KEY=YOUR_API_KEY_HERE
         ```
     *   **Important:** Keep your API key secret. Do not commit the `.env` file to version control. Make sure there are no extra spaces or characters around the key.
 
