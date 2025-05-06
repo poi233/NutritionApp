@@ -2,6 +2,8 @@
 /**
  * @fileOverview Recommends new recipes based on dietary needs and preferences.
  *
+ * NOTE: This flow might be superseded by `generate-weekly-recipes.ts`. Consider migrating or removing.
+ *
  * - recommendNewRecipes - A function that handles the recipe recommendation process.
  * - RecommendNewRecipesInput - The input type for the recommendNewRecipes function.
  * - RecommendNewRecipesOutput - The return type for the recommendNewRecipes function.
@@ -42,7 +44,7 @@ Dietary Needs: {{{dietaryNeeds}}}
 Preferences: {{{preferences}}}
 Weekly Recipes: {{{weeklyRecipes}}}
 
-Recommend 3 new recipes that fit these needs and preferences.`,
+Recommend 3 new recipes that fit these needs and preferences. Provide only the recipe names.`, // Adjusted prompt for clarity
 });
 
 const recommendNewRecipesFlow = ai.defineFlow(

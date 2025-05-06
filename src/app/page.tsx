@@ -1,97 +1,157 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { Recipe } from "@/types/recipe";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type { Recipe, Ingredient } from "@/types/recipe";
 import { RecipeInputForm } from "@/components/recipe-input-form";
 import { RecipeList } from "@/components/recipe-list";
 import { NutritionalAnalysis } from "@/components/nutritional-analysis";
-import { RecipeRecommendations } from "@/components/recipe-recommendations";
+import { RecipeRecommendations } from "@/components/recipe-recommendations"; // Keep for generated recipes
 import { PreferencesForm } from "@/components/preferences-form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
-import { recommendNewRecipes, type RecommendNewRecipesOutput, type RecommendNewRecipesInput } from "@/ai/flows/recommend-new-recipes";
-import { ChefHat, ListChecks, RefreshCw } from "lucide-react";
-
+import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput, type GeneratedRecipeSchema } from "@/ai/flows/generate-weekly-recipes";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight } from "lucide-react";
+import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 
 interface UserPreferences {
   dietaryNeeds?: string;
   preferences?: string;
 }
 
+// Helper to get the start of the week (assuming Monday start)
+const getWeekStartDate = (date: Date): string => {
+  return format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+};
+
 export default function Home() {
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(getWeekStartDate(new Date()));
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
-  const [recommendations, setRecommendations] = useState<string[] | null>(null);
+  const [generatedRecipes, setGeneratedRecipes] = useState<GenerateWeeklyRecipesOutput | null>(null);
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "" });
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
-  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
   const { toast } = useToast();
+
+  // Derived state for recipes of the current week
+  const currentWeekRecipes = useMemo(() => {
+      return weeklyRecipes[currentWeekStartDate] || [];
+  }, [weeklyRecipes, currentWeekStartDate]);
 
   // Load data from localStorage on initial render
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("nutrijournal_recipes");
+    const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
     const storedPreferences = localStorage.getItem("nutrijournal_preferences");
-    if (storedRecipes) {
-      setRecipes(JSON.parse(storedRecipes));
+    if (storedWeeklyRecipes) {
+      setWeeklyRecipes(JSON.parse(storedWeeklyRecipes));
     }
      if (storedPreferences) {
       setUserPreferences(JSON.parse(storedPreferences));
     }
+    // Set current week based on today's date
+    setCurrentWeekStartDate(getWeekStartDate(new Date()));
   }, []);
 
-  // Save recipes to localStorage whenever they change
+  // Save weekly recipes to localStorage whenever they change
   useEffect(() => {
-    if (recipes.length > 0) {
-      localStorage.setItem("nutrijournal_recipes", JSON.stringify(recipes));
+    if (Object.keys(weeklyRecipes).length > 0) {
+      localStorage.setItem("nutrijournal_weekly_recipes", JSON.stringify(weeklyRecipes));
     } else {
-       localStorage.removeItem("nutrijournal_recipes"); // Clear if empty
+       localStorage.removeItem("nutrijournal_weekly_recipes"); // Clear if empty
     }
-  }, [recipes]);
+  }, [weeklyRecipes]);
 
    // Save preferences to localStorage whenever they change
    useEffect(() => {
     localStorage.setItem("nutrijournal_preferences", JSON.stringify(userPreferences));
    }, [userPreferences]);
 
-  const handleAddRecipe = (newRecipe: Recipe) => {
-    setRecipes((prevRecipes) => [...prevRecipes, newRecipe]);
-     // Clear previous analysis/recommendations when a recipe is added
+   // Clear analysis and generated recipes when week changes
+   useEffect(() => {
      setNutritionalAnalysis(null);
-     setRecommendations(null);
+     setGeneratedRecipes(null);
+   }, [currentWeekStartDate]);
+
+   // --- Week Navigation ---
+   const goToPreviousWeek = () => {
+      setCurrentWeekStartDate(prev => getWeekStartDate(subWeeks(parseISO(prev), 1)));
+   };
+
+   const goToNextWeek = () => {
+      setCurrentWeekStartDate(prev => getWeekStartDate(addWeeks(parseISO(prev), 1)));
+   };
+
+   const formatWeekDisplay = (startDate: string): string => {
+      const start = parseISO(startDate);
+      const end = endOfWeek(start, { weekStartsOn: 1 });
+      return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
+   }
+
+   // --- Recipe Management ---
+   const handleAddRecipe = (newRecipeData: Omit<Recipe, 'id' | 'weekStartDate'>) => {
+    const recipeId = `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`; // More robust ID
+    const newRecipe: Recipe = {
+        ...newRecipeData,
+        id: recipeId,
+        weekStartDate: currentWeekStartDate,
+        ingredients: newRecipeData.ingredients.map((ing, index) => ({
+            ...ing,
+            id: `ingredient-${recipeId}-${index}`
+        }))
+    };
+
+    setWeeklyRecipes((prevWeekly => {
+      const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), newRecipe];
+      return { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
+    }));
+
+     // Clear previous analysis/recommendations when a recipe is added to the current week
+     setNutritionalAnalysis(null);
+     setGeneratedRecipes(null); // Clear generated suggestions as well
     toast({
       title: "Recipe Added",
-      description: `${newRecipe.name} has been added to your list.`,
+      description: `${newRecipe.name} has been added for the week of ${format(parseISO(currentWeekStartDate), 'MMM d')}.`,
     });
   };
 
   const handleDeleteRecipe = (recipeId: string) => {
-     setRecipes((prevRecipes) => prevRecipes.filter(recipe => recipe.id !== recipeId));
-      // Clear previous analysis/recommendations when a recipe is deleted
+     setWeeklyRecipes((prevWeekly) => {
+        const weekRecipes = prevWeekly[currentWeekStartDate] || [];
+        const updatedWeek = weekRecipes.filter(recipe => recipe.id !== recipeId);
+         if (updatedWeek.length === 0) {
+             const { [currentWeekStartDate]: _, ...rest } = prevWeekly; // Remove week if empty
+             return rest;
+         }
+        return { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
+     });
+      // Clear previous analysis/recommendations when a recipe is deleted from the current week
      setNutritionalAnalysis(null);
-     setRecommendations(null);
+     setGeneratedRecipes(null);
       toast({
         title: "Recipe Removed",
-        description: `The recipe has been removed from your list.`,
+        description: `The recipe has been removed from this week's list.`,
         variant: "destructive",
       });
   };
 
+  // --- Preferences ---
   const handleUpdatePreferences = (data: UserPreferences) => {
     setUserPreferences(data);
-    // Clear recommendations when preferences change, prompt user to re-generate
-    setRecommendations(null);
+    // Clear generated recipes when preferences change, prompt user to re-generate
+    setGeneratedRecipes(null);
     toast({
       title: "Preferences Updated",
       description: "Your dietary needs and preferences have been saved.",
     });
   };
 
+  // --- AI Features ---
   const triggerAnalysis = useCallback(async () => {
-    if (recipes.length === 0) {
+    if (currentWeekRecipes.length === 0) {
       toast({
         title: "No Recipes",
-        description: "Please add some recipes before analyzing.",
+        description: "Please add some recipes for this week before analyzing.",
         variant: "destructive",
       });
       return;
@@ -102,7 +162,7 @@ export default function Home() {
 
     try {
        const analysisInput: AnalyzeNutritionalBalanceInput = {
-         recipes: recipes.map(r => ({
+         recipes: currentWeekRecipes.map(r => ({
            name: r.name,
            ingredients: r.ingredients.map(i => ({ name: i.name, quantity: i.quantity })),
          })),
@@ -111,7 +171,7 @@ export default function Home() {
        setNutritionalAnalysis(result);
        toast({
          title: "Analysis Complete",
-         description: "Nutritional insights generated successfully.",
+         description: "Nutritional insights generated for this week.",
        });
     } catch (error) {
        console.error("Error analyzing nutrition:", error);
@@ -124,70 +184,72 @@ export default function Home() {
     } finally {
        setIsLoadingAnalysis(false);
     }
-  }, [recipes, toast]);
+  }, [currentWeekRecipes, toast]);
 
 
-  const triggerRecommendations = useCallback(async () => {
-     if (recipes.length === 0) {
-       toast({
-         title: "No Recipes",
-         description: "Add some recipes first to get relevant recommendations.",
-         variant: "destructive",
-       });
-       return;
-     }
+  const triggerWeeklyGeneration = useCallback(async () => {
+    setIsLoadingGeneration(true);
+    setGeneratedRecipes(null); // Clear previous suggestions
 
-    setIsLoadingRecommendations(true);
-    setRecommendations(null); // Clear previous recommendations
-
+    // Find previous week's recipes
+    const previousWeekStartDate = getWeekStartDate(subWeeks(parseISO(currentWeekStartDate), 1));
+    const previousWeekRecipes = weeklyRecipes[previousWeekStartDate] || [];
+    const previousWeekRecipesString = previousWeekRecipes.length > 0
+        ? previousWeekRecipes.map(recipe =>
+             `Recipe: ${recipe.name}\nIngredients:\n${recipe.ingredients.map(ing => `- ${ing.name} (${ing.quantity}g)`).join('\n')}`
+           ).join('\n\n')
+        : undefined; // Pass undefined if no recipes last week
 
     try {
-       // Prepare weekly recipes string
-       const weeklyRecipesString = recipes.map(recipe =>
-         `Recipe: ${recipe.name}\nIngredients:\n${recipe.ingredients.map(ing => `- ${ing.name} (${ing.quantity}g)`).join('\n')}`
-       ).join('\n\n');
-
-       const recommendationInput: RecommendNewRecipesInput = {
+       const generationInput: GenerateWeeklyRecipesInput = {
+         weekStartDate: currentWeekStartDate,
          dietaryNeeds: userPreferences.dietaryNeeds || "None specified",
          preferences: userPreferences.preferences || "None specified",
-         weeklyRecipes: weeklyRecipesString,
+         previousWeekRecipes: previousWeekRecipesString,
        };
 
-      const result = await recommendNewRecipes(recommendationInput);
-      setRecommendations(result.recipes);
+      const result = await generateWeeklyRecipes(generationInput);
+      setGeneratedRecipes(result);
       toast({
-        title: "Recommendations Ready",
-        description: "New recipe ideas have been generated for you!",
+        title: "Recipe Suggestions Ready",
+        description: `New ideas generated for the week of ${format(parseISO(currentWeekStartDate), 'MMM d')}!`,
       });
     } catch (error) {
-      console.error("Error recommending recipes:", error);
+      console.error("Error generating weekly recipes:", error);
       toast({
-        title: "Recommendation Failed",
-        description: "Could not generate recipe recommendations. Please try again.",
+        title: "Generation Failed",
+        description: "Could not generate weekly recipe suggestions. Please try again.",
         variant: "destructive",
       });
-      setRecommendations(null); // Ensure it stays null on error
+      setGeneratedRecipes(null); // Ensure it stays null on error
     } finally {
-      setIsLoadingRecommendations(false);
+      setIsLoadingGeneration(false);
     }
-  }, [recipes, userPreferences, toast]);
+  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast]);
 
 
   return (
     <main className="container mx-auto p-4 md:p-8 flex flex-col items-center min-h-screen bg-background">
-      <h1 className="text-4xl font-bold mb-8 text-primary flex items-center gap-2">
-         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-primary">
-          <path d="M12.75 10.326a1.5 1.5 0 1 1-1.5 1.5a1.5 1.5 0 0 1 1.5-1.5Z" />
-          <path fillRule="evenodd" d="M6 3.75a5.25 5.25 0 0 1 5.25-1.5h1.5a5.25 5.25 0 0 1 5.25 1.5v16.5a1.5 1.5 0 0 1-1.5 1.5h-10.5a1.5 1.5 0 0 1-1.5-1.5V3.75Zm1.5 15.75a1.5 1.5 0 0 1 1.5-1.5h7.5a1.5 1.5 0 0 1 1.5 1.5v.75a.75.75 0 0 1-.75.75H8.25a.75.75 0 0 1-.75-.75v-.75Zm.75-12a.75.75 0 0 0-.75.75v6a.75.75 0 0 0 .75.75h9a.75.75 0 0 0 .75-.75v-6a.75.75 0 0 0-.75-.75h-9Z" clipRule="evenodd" />
-        </svg>
-        NutriJournal
-      </h1>
+       <div className="flex items-center justify-center mb-4 text-center w-full max-w-4xl">
+         <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="Previous Week">
+            <ArrowLeft className="h-5 w-5" />
+         </Button>
+         <h1 className="text-3xl md:text-4xl font-bold text-primary flex items-center gap-2 mx-4 flex-1 justify-center">
+            <Calendar className="w-7 h-7 md:w-8 md:h-8 text-primary" />
+             <span className="whitespace-nowrap">{formatWeekDisplay(currentWeekStartDate)}</span>
+         </h1>
+         <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="Next Week">
+            <ArrowRight className="h-5 w-5" />
+         </Button>
+       </div>
+       <p className="text-muted-foreground mb-8">Manage and analyze your recipes week by week.</p>
+
 
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Left Column: Input and List */}
         <div className="space-y-8">
-          <RecipeInputForm onAddRecipe={handleAddRecipe} />
-          <RecipeList recipes={recipes} onDeleteRecipe={handleDeleteRecipe} />
+          <RecipeInputForm onAddRecipe={handleAddRecipe} currentWeekStartDate={currentWeekStartDate} />
+          <RecipeList recipes={currentWeekRecipes} onDeleteRecipe={handleDeleteRecipe} weekStartDate={currentWeekStartDate} />
         </div>
 
         {/* Right Column: Preferences, Actions, Analysis, Recommendations */}
@@ -198,27 +260,33 @@ export default function Home() {
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Button
                  onClick={triggerAnalysis}
-                 disabled={isLoadingAnalysis || recipes.length === 0}
+                 disabled={isLoadingAnalysis || currentWeekRecipes.length === 0}
                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                >
                  {isLoadingAnalysis ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
-                 Analyze Nutrition
+                 Analyze This Week
               </Button>
                <Button
-                 onClick={triggerRecommendations}
-                 disabled={isLoadingRecommendations || recipes.length === 0}
+                 onClick={triggerWeeklyGeneration}
+                 disabled={isLoadingGeneration}
                  className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
                >
-                  {isLoadingRecommendations ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ChefHat className="mr-2 h-4 w-4" />}
-                 Recommend Recipes
+                  {isLoadingGeneration ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ChefHat className="mr-2 h-4 w-4" />}
+                 Generate Weekly Recipes
                </Button>
            </div>
 
-          <NutritionalAnalysis analysis={nutritionalAnalysis} isLoading={isLoadingAnalysis} />
-          <RecipeRecommendations recommendations={recommendations} isLoading={isLoadingRecommendations} />
+          <NutritionalAnalysis analysis={nutritionalAnalysis} isLoading={isLoadingAnalysis} weekStartDate={currentWeekStartDate} />
+          {/* Use RecipeRecommendations to display the generated recipes */}
+          <RecipeRecommendations
+             recommendations={generatedRecipes?.suggestedRecipes.map(r => `${r.name}: ${r.description}`) ?? null}
+             notes={generatedRecipes?.notes}
+             isLoading={isLoadingGeneration}
+             title="Weekly Recipe Suggestions"
+             description={`AI-generated ideas for the week of ${format(parseISO(currentWeekStartDate), 'MMM d')}.`}
+           />
         </div>
       </div>
     </main>
   );
 }
-
