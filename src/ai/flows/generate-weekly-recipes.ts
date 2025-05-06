@@ -9,6 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { google } from "@ai-sdk/google"; // Keep import if used elsewhere, but model name needs prefix
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const mealTypes = ["Breakfast", "Lunch", "Dinner", "Snack"];
@@ -74,7 +75,9 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Use googleai/ prefix for Genkit Google AI plugin
+  // Use the 'googleai/' prefix and a stable model name.
+  // 'gemini-1.5-flash' is generally available. 'latest' might cause issues.
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -135,7 +138,9 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         }
         // Check for model not found error specifically
         if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-            console.error(`The specified model in generateWeeklyRecipesPrompt ('${prompt.model?.name}') was not found or is invalid.`);
+            // Ensure the model name logged matches the one used
+            const modelName = prompt.model?.name || 'Unknown Model';
+            console.error(`The specified model in generateWeeklyRecipesPrompt ('${modelName}') was not found or is invalid.`);
             throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
         }
        // Throw generic AI error for other issues
@@ -171,5 +176,3 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
      }
   }
 );
-
-

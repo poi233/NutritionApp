@@ -10,6 +10,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import {Food, getNutrition} from '@/services/nutrition';
+import { google } from "@ai-sdk/google"; // Keep import if used elsewhere, but model name needs prefix
 
 const AnalyzeNutritionalBalanceInputSchema = z.object({
   recipes: z.array(
@@ -86,7 +87,8 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 // Note: The prompt now receives recipe names with context
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Use googleai/ prefix for Genkit Google AI plugin
+  // Use the 'googleai/' prefix and a stable model name.
+  model: 'googleai/gemini-1.5-flash',
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -196,7 +198,9 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             }
             // Check for model not found error specifically
             if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-               console.error(`The specified model in analyzeNutritionalBalancePrompt ('${analyzeNutritionalBalancePrompt.model?.name}') was not found or is invalid.`);
+               // Ensure model name logged matches the one used
+               const modelName = analyzeNutritionalBalancePrompt.model?.name || 'Unknown Model';
+               console.error(`The specified model in analyzeNutritionalBalancePrompt ('${modelName}') was not found or is invalid.`);
                throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
             }
             // Throw generic AI error for other issues
@@ -229,4 +233,3 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
     }
   }
 );
-
