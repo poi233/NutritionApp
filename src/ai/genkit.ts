@@ -5,11 +5,22 @@ import path from "path";
 
 // Check if GOOGLE_API_KEY is set
 if (!process.env.GOOGLE_API_KEY) {
-  console.warn(
-    '\nWARNING: GOOGLE_API_KEY environment variable not set.\n' +
-    'Generative AI features will not work. Please set the key in your .env file.\n' +
-    'Get a key from Google AI Studio: https://aistudio.google.com/app/apikey\n'
+  console.error(
+    '\n[Genkit Init Error] FATAL: GOOGLE_API_KEY environment variable is not set.\n' +
+    'Generative AI features will NOT work.\n' +
+    '1. Ensure you have a `.env` file in the root of your project.\n' +
+    '2. Add the following line to your `.env` file:\n' +
+    '   GOOGLE_API_KEY=YOUR_API_KEY_HERE\n' +
+    '3. Replace `YOUR_API_KEY_HERE` with your actual key from Google AI Studio.\n' +
+    '4. Get a key here: https://aistudio.google.com/app/apikey\n' +
+    '5. Restart your development server (`npm run dev` and `npm run genkit:dev`).\n'
   );
+   // Optional: Throw an error to prevent the app from potentially running
+   // in a broken state if the key is absolutely essential.
+   // throw new Error("Missing GOOGLE_API_KEY environment variable. AI features disabled.");
+} else {
+     // Optional: Log success or partial key for verification (DO NOT log the full key)
+     console.log("[Genkit Init] GOOGLE_API_KEY found (ending with '..." + process.env.GOOGLE_API_KEY.slice(-4) + "').");
 }
 
 export const ai = genkit({

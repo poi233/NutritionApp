@@ -54,9 +54,12 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
   // The flow execution might throw errors (e.g., API key issues, network problems)
   // We catch them here to prevent unhandled promise rejections.
   try {
-      return await analyzeNutritionalBalanceFlow(input);
+      console.log("Entering analyzeNutritionalBalance function with input:", input);
+      const result = await analyzeNutritionalBalanceFlow(input);
+      console.log("analyzeNutritionalBalanceFlow returned successfully:", result);
+      return result;
   } catch (error) {
-      console.error("Error executing analyzeNutritionalBalanceFlow:", error);
+      console.error("Error executing analyzeNutritionalBalance function:", error);
       // Re-throw the error so the client-side catch block can handle it
       // Or return a specific error structure if needed
       throw new Error(`Failed to analyze nutritional balance: ${error instanceof Error ? error.message : String(error)}`);
@@ -105,8 +108,10 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
     outputSchema: AnalyzeNutritionalBalanceOutputSchema,
   },
   async input => {
+    console.log("Entering analyzeNutritionalBalanceFlow with input:", input);
     try {
         // 1. Calculate nutrition for each recipe first
+        console.log("Calculating nutrition for recipes...");
         const calculatedNutrition = await Promise.all(
           input.recipes.map(async recipe => {
             let totalCalories = 0;
@@ -116,6 +121,7 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
 
             for (const ingredient of recipe.ingredients) {
                try {
+                  // console.log(`Fetching nutrition for ingredient: ${ingredient.name}`); // Verbose logging
                   const nutrition = await getNutrition(ingredient.name);
                   const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
 
@@ -124,7 +130,8 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
                   totalFat += (nutrition.fat || 0) * factor;
                   totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
                 } catch (error) {
-                     console.warn(`Could not get nutrition for ingredient "${ingredient.name}" during analysis calculation:`, error);
+                     // Log specific ingredient error
+                     console.warn(`Could not get nutrition for ingredient "${ingredient.name}" in recipe "${recipe.name}" during analysis calculation:`, error);
                  }
             }
 
@@ -137,32 +144,56 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             };
           })
         );
+        console.log("Calculated nutrition:", calculatedNutrition);
 
         // 2. Prepare input for the AI prompt, including the calculated data
         const promptInput = {
           calculatedNutrition: calculatedNutrition,
           originalInput: input, // Pass the original input for context if needed by the prompt
         };
+         console.log("Prepared prompt input:", JSON.stringify(promptInput, null, 2)); // Log the input being sent to the AI
 
         // 3. Call the AI prompt with the combined data
         // Add specific try-catch for the AI call
         let output: AnalyzeNutritionalBalanceOutput | null = null;
         try {
+            console.log("Calling analyzeNutritionalBalancePrompt...");
             const promptResult = await analyzeNutritionalBalancePrompt(promptInput);
+            console.log("analyzeNutritionalBalancePrompt raw result:", promptResult); // Log the raw result
             output = promptResult.output; // Access output directly
             if (!output) {
                  console.error('analyzeNutritionalBalancePrompt returned null or undefined output.');
                  throw new Error('AI prompt failed to generate a valid output structure.');
             }
+             console.log("analyzeNutritionalBalancePrompt parsed output:", output);
         } catch (aiError) {
             console.error("Error calling analyzeNutritionalBalancePrompt:", aiError);
+             // Check if it's an API key issue more specifically
+            if (aiError instanceof Error && (aiError.message.includes('API key not valid') || aiError.message.includes('API_KEY_INVALID'))) {
+                 console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
+                 throw new Error(`AI prompt execution failed: Invalid Google AI API Key. ${aiError.message}`);
+            }
             throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
         }
 
-        // 4. Return the result.
+        // 4. Return the result. Ensure the structure matches the schema.
+        // If AI provides analyzedRecipes, use that. Otherwise, fall back to our calculatedNutrition.
+        const finalAnalyzedRecipes = (output?.analyzedRecipes && output.analyzedRecipes.length > 0)
+            ? output.analyzedRecipes
+            : calculatedNutrition;
+
+        // Ensure insights object exists, provide a default if AI failed to generate it but didn't throw
+         const finalInsights = output.nutritionalInsights || {
+             overallBalance: "Analysis could not determine overall balance.",
+             macroNutrientRatio: "Analysis could not determine macronutrient ratio.",
+             suggestions: ["No suggestions available due to analysis issue."]
+         };
+
+
+        console.log("analyzeNutritionalBalanceFlow returning final structure:", { analyzedRecipes: finalAnalyzedRecipes, nutritionalInsights: finalInsights });
         return {
-          analyzedRecipes: output?.analyzedRecipes && output.analyzedRecipes.length > 0 ? output.analyzedRecipes : calculatedNutrition,
-          nutritionalInsights: output.nutritionalInsights, // Assume insights are always generated if output is valid
+          analyzedRecipes: finalAnalyzedRecipes,
+          nutritionalInsights: finalInsights,
         };
     } catch (flowError) {
         console.error("Error within analyzeNutritionalBalanceFlow logic:", flowError);

@@ -55,7 +55,7 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
           totalFat += (nutrition.fat || 0) * factor;
           totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
         } catch (error) {
-             console.warn(`Could not get nutrition for ingredient "${ingredient.name}":`, error);
+             console.warn(`Could not get nutrition for ingredient "${ingredient.name}" during recipe estimation:`, error);
              // Optionally assign default/zero values or handle differently
         }
     }
@@ -196,7 +196,9 @@ export default function Home() {
     // Estimate nutrition only if valid ingredients are present
     if (newRecipe.ingredients.length > 0) {
       try {
+        console.log(`Estimating nutrition for ${newRecipe.name}...`);
         newRecipe = await estimateRecipeNutrition(newRecipe);
+        console.log(`Nutrition estimated for ${newRecipe.name}:`, {calories: newRecipe.calories, protein: newRecipe.protein, fat: newRecipe.fat, carbs: newRecipe.carbohydrates});
       } catch (error) {
         console.error("Error estimating nutrition during recipe add:", error);
         toast({
@@ -315,10 +317,12 @@ export default function Home() {
            return;
        }
 
-
+       console.log("Calling analyzeNutritionalBalance flow with input:", analysisInput);
        const result = await analyzeNutritionalBalance(analysisInput);
+       console.log("Received analysis result:", result);
 
         if (!result || !result.nutritionalInsights) {
+             console.error("Analysis completed but returned invalid data structure:", result);
              throw new Error("Analysis completed but returned invalid data.");
          }
 
@@ -328,10 +332,10 @@ export default function Home() {
          description: "Nutritional insights generated for this week.",
        });
     } catch (error) {
-       console.error("Error analyzing nutrition:", error);
+       console.error("Error in triggerAnalysis calling analyzeNutritionalBalance:", error);
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during analysis.";
         // Check for specific API key error (example, adjust based on actual error message)
-        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID");
+        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
 
        toast({
          title: "Analysis Failed",
@@ -340,12 +344,12 @@ export default function Home() {
                 {isApiKeyError ? (
                     <>
                         <AlertTriangle className="inline h-4 w-4 mr-1" />
-                        Please ensure your Google AI API key is set correctly in the .env file and the server is restarted.
+                        API key error. Please check your GOOGLE_API_KEY in `.env` and restart the server.
                     </>
                 ) : (
                     errorMessage
                 )}
-                <br /> Check server logs for more details.
+                <br /> Check browser console and server logs for more details.
              </>
          ),
          variant: "destructive",
@@ -400,10 +404,13 @@ export default function Home() {
          numberOfSuggestions: 7, // Or make this dynamic
        };
 
-      const result = await generateWeeklyRecipes(generationInput);
+       console.log("Calling generateWeeklyRecipes flow with input:", generationInput);
+       const result = await generateWeeklyRecipes(generationInput);
+       console.log("Received generation result:", result);
 
        if (!result || !result.suggestedRecipes) {
-         throw new Error("Recipe generation returned invalid data.");
+          console.error("Recipe generation returned invalid data structure:", result);
+          throw new Error("Recipe generation returned invalid data.");
        }
 
 
@@ -462,9 +469,9 @@ export default function Home() {
       }
 
     } catch (error) {
-       console.error("Error generating weekly recipes:", error);
+       console.error("Error in triggerWeeklyGeneration calling generateWeeklyRecipes:", error);
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during recipe generation.";
-        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID");
+        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
 
        toast({
          title: "Generation Failed",
@@ -473,12 +480,12 @@ export default function Home() {
                {isApiKeyError ? (
                   <>
                     <AlertTriangle className="inline h-4 w-4 mr-1" />
-                    Please ensure your Google AI API key is set correctly in the .env file and the server is restarted.
+                    API key error. Please check your GOOGLE_API_KEY in `.env` and restart the server.
                   </>
                ) : (
                   errorMessage
                )}
-               <br /> Check server logs for more details.
+               <br /> Check browser console and server logs for more details.
              </>
           ),
          variant: "destructive",
