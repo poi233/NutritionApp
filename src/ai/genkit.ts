@@ -26,13 +26,21 @@ if (!process.env.GOOGLE_API_KEY) {
      console.log("[Genkit Init] GOOGLE_API_KEY found and will be used (ending with '..." + googleApiKey.slice(-4) + "').");
 }
 
+let googleAIPlugin;
+
+try {
+  googleAIPlugin = googleAI({
+    // Explicitly pass the API key if it was found.
+    // The plugin typically reads this implicitly, but being explicit can help debugging.
+    apiKey: googleApiKey,
+  });
+} catch (error) {
+  console.error("[Genkit Init Error] Error initializing Google AI plugin:", error);
+}
+
 export const ai = genkit({
   plugins: [
-    googleAI({
-        // Explicitly pass the API key if it was found.
-        // The plugin typically reads this implicitly, but being explicit can help debugging.
-        apiKey: googleApiKey,
-    }),
+    googleAIPlugin,
      // defineDotprompt({ dir: path.join(__dirname, "../prompts") }), // Example if using .prompt files
   ],
   // Removed default model here, specify it in the prompt/generate call
@@ -45,4 +53,15 @@ if (googleApiKey) {
     console.log("[Genkit Init] Google AI Plugin configured with API key.");
 } else {
     console.warn("[Genkit Init] Google AI Plugin configured WITHOUT an API key. AI features will likely fail.");
+}
+
+// List available models - ensure `ai` is initialized first
+if (ai) {
+  ai.getAvailableModels().then(models => {
+    console.log('[Genkit Init] Available Models:', models);
+  }).catch(err => {
+    console.error('[Genkit Init] Error getting available models:', err);
+  });
+} else {
+  console.warn('[Genkit Init] Could not retrieve available models because Genkit AI object was not properly initialized.');
 }
