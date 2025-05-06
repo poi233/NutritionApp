@@ -9,6 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { google } from "@ai-sdk/google"; // Keep unused import for potential future use? Or remove?
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const mealTypes = ["Breakfast", "Lunch", "Dinner", "Snack"];
@@ -24,9 +25,11 @@ const GenerateWeeklyRecipesInputSchema = z.object({
 });
 export type GenerateWeeklyRecipesInput = z.infer<typeof GenerateWeeklyRecipesInputSchema>;
 
+// Modify the quantity schema to use min(0.1) instead of positive()
 const GeneratedIngredientSchema = z.object({
     name: z.string().describe('The name of the estimated ingredient.'),
-    quantity: z.number().positive().describe('The estimated quantity of the ingredient in grams.'),
+    // Use min(0.1) to guide the model towards positive numbers without using the problematic .positive() constraint
+    quantity: z.number().min(0.1, "Quantity must be at least 0.1").describe('The estimated quantity of the ingredient in grams (must be greater than 0).'),
 });
 
 const GeneratedRecipeSchema = z.object({
@@ -36,7 +39,7 @@ const GeneratedRecipeSchema = z.object({
     dayOfWeek: z.enum(daysOfWeek as [string, ...string[]]).describe('The suggested day of the week for this meal.'),
     mealType: z.enum(mealTypes as [string, ...string[]]).describe('The suggested meal type for this meal.'),
     // Generate estimated ingredients
-    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe.'),
+    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
 });
 
 const GenerateWeeklyRecipesOutputSchema = z.object({
@@ -88,7 +91,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
   // Use the 'googleai/' prefix and a stable, available model name.
-  model: 'googleai/gemini-1.5-flash',
+  model: 'googleai/gemini-1.5-flash', // Ensure this model is correct and available
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -110,9 +113,9 @@ Consider the following user information:
 2.  **Identify Gaps:** Determine which days/meal slots are empty in the current week.
 3.  **Generate Suggestions:** Create {{numberOfSuggestions}} meal suggestions that fit the user's dietary needs and preferences. Prioritize filling the identified gaps. Ensure variety.
 4.  **Assign Day/Meal:** For EACH suggestion, assign a valid 'dayOfWeek' (exactly one of: ${daysOfWeek.join(', ')}) and 'mealType' (exactly one of: ${mealTypes.join(', ')}). Be specific.
-5.  **Estimate Ingredients:** For EACH suggestion, provide a plausible list of main 'ingredients' with estimated 'quantity' in grams (e.g., [{ name: "Chicken Breast", quantity: 150 }, { name: "Broccoli", quantity: 100 }]). Aim for reasonable portion sizes. This is crucial for later nutritional estimation. The ingredients list must not be empty.
+5.  **Estimate Ingredients:** For EACH suggestion, provide a plausible list of main 'ingredients' with estimated 'quantity' in grams (e.g., [{ name: "Chicken Breast", quantity: 150 }, { name: "Broccoli", quantity: 100 }]). Aim for reasonable portion sizes and ensure quantity is a positive number (e.g., greater than 0). This is crucial for later nutritional estimation. The ingredients list must not be empty.
 6.  **Balance:** If previous week's meals are provided, try to suggest recipes that complement or balance the previous week's nutritional profile (e.g., if last week was heavy on meat, suggest more vegetarian options).
-7.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', 'mealType', and an 'ingredients' array. Include overall 'notes' if applicable.
+7.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', 'mealType', and an 'ingredients' array where each ingredient has a 'name' and a positive 'quantity'. Include overall 'notes' if applicable.
 `,
 });
 
@@ -162,6 +165,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
 
      // Validate AI output against Zod schema again for robustness, and provide fallbacks
      try {
+       // Ensure GeneratedIngredientSchema is used within GeneratedRecipeSchema for validation
        const validatedOutput = GenerateWeeklyRecipesOutputSchema.parse(output);
        console.log("Validated AI output:", validatedOutput);
        // Return validated output directly
@@ -173,20 +177,19 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
          // Attempt to salvage: Filter valid recipes and provide default notes
          const salvageableRecipes = (output?.suggestedRecipes || []).filter(recipe => {
             try {
-                // Ensure generated ingredients are also validated
+                // Ensure generated ingredients are also validated using the updated schema
                 GeneratedRecipeSchema.parse(recipe);
                 return true;
-            } catch {
-                console.warn(`Filtering out invalid suggested recipe: ${JSON.stringify(recipe)}`);
+            } catch (recipeValidationError) {
+                console.warn(`Filtering out invalid suggested recipe: ${JSON.stringify(recipe)}. Error: ${recipeValidationError}`);
                 return false;
             }
          });
 
           return {
               suggestedRecipes: salvageableRecipes,
-              notes: output?.notes || "AI generated recipes, but some might be invalid or incomplete due to formatting issues (especially ingredients)."
+              notes: output?.notes || "AI generated recipes, but some might be invalid or incomplete due to formatting issues (especially ingredients or quantities)."
           };
      }
   }
 );
-
