@@ -38,21 +38,21 @@ const GeneratedRecipeSchema = z.object({
 });
 
 
-// Input schema remains the same, preferences might now include Chinese
+// Input schema: Removed numberOfSuggestions as we now aim for a full week
 const GenerateWeeklyRecipesInputSchema = z.object({
   weekStartDate: z.string().describe('The start date of the week for which to generate recipes (ISO format: yyyy-MM-dd).'),
   dietaryNeeds: z.string().optional().describe('The dietary needs of the user (e.g., vegetarian, gluten-free).'),
   preferences: z.string().optional().describe('The food preferences of the user (e.g., Chinese food, Italian, spicy).'), // Added Chinese food example
   previousWeekRecipes: z.string().optional().describe('A summary of recipes from the previous week, used for context and nutritional balancing (format: "Day: [Day Name], Meal: [Meal Type], Recipe: [Recipe Name]").'),
   existingCurrentWeekRecipes: z.string().optional().describe('A summary of recipes already planned for the current week, to avoid duplicates and fill gaps (same format as previousWeekRecipes).'),
-  numberOfSuggestions: z.number().optional().default(7).describe('Approximate number of meal suggestions to generate (default: 7). Aim for variety across days/meals.')
 });
 export type GenerateWeeklyRecipesInput = z.infer<typeof GenerateWeeklyRecipesInputSchema>;
 
 
 // Output Schema: Use the updated GeneratedRecipeSchema which expects Chinese names/descriptions
 const GenerateWeeklyRecipesOutputSchema = z.object({
-  suggestedRecipes: z.array(GeneratedRecipeSchema).describe('A list of suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week. Recipe names and descriptions should be in Chinese.'),
+  // Expect exactly 21 recipes (3 meals * 7 days)
+  suggestedRecipes: z.array(GeneratedRecipeSchema).length(21, "需要提供完整的每周21餐建议").describe('A list of 21 suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week (one for each Breakfast, Lunch, Dinner slot from Monday to Sunday). Recipe names and descriptions should be in Chinese.'),
   notes: z.string().optional().describe('Any additional notes or comments on the suggestions (in Chinese), e.g., regarding nutritional balance or variety.'), // Specify Chinese notes
 });
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
@@ -102,6 +102,17 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
           throw new Error(`生成每周食谱失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
      }
 
+      // Check for schema validation error (like length mismatch)
+     if (error instanceof z.ZodError) {
+         console.error("AI output failed Zod validation:", error.issues);
+         throw new Error(`生成每周食谱失败：AI 返回的数据格式无效或不完整。模式验证错误: ${error.message}`);
+     }
+      if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema')) {
+           console.error("AI 返回了无效的 JSON 结构，与 Zod 模式不匹配。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
+           throw new Error(`AI 提示执行失败：AI 返回的数据格式无效。${errorMessage}`);
+      }
+
+
      // Re-throw other errors (in Chinese)
       throw new Error(`生成每周食谱失败: ${errorMessage}`);
    }
@@ -123,8 +134,8 @@ const prompt = ai.definePrompt({
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   // Updated prompt to request Chinese output, use internal English day/meal names, and exclude snacks.
-  // Added more explicit instructions about distribution and filling gaps.
-  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。**目标是将这些建议均匀地分配到本周不同的日期和餐别时段（${mealTypesInternal.join('/')}），优先填补空白时段。** 输出语言必须为简体中文。
+  // Explicitly request a recipe for EVERY meal slot (21 total).
+  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成一个完整的每周食谱计划。**目标是为周一至周日的每一餐（早餐、午餐、晚餐）提供一个具体的食谱建议，总共 21 个食谱。** 输出语言必须为简体中文。
 
 请考虑以下用户信息：
 - 饮食需求：{{{dietaryNeeds}}}
@@ -134,18 +145,16 @@ const prompt = ai.definePrompt({
 {{{previousWeekRecipes}}}
 {{/if}}
 {{#if existingCurrentWeekRecipes}}
-- 本周已计划的餐点（请避免重复这些时段，并尝试用新建议补充空白时段）：
+- 本周已计划的餐点（请避免在这些时段生成重复建议，但仍需为所有 21 个时段提供建议，可以替换已有的）：
 {{{existingCurrentWeekRecipes}}}
 {{/if}}
 
 **说明：**
-1.  **分析：** 查看上周的餐点（如果提供）和本周已计划的餐点（如果提供）。
-2.  **识别空缺：** 确定本周哪些日期/餐别时段（早餐、午餐、晚餐）是空的，没有任何计划。
-3.  **生成建议：** 创建大约 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。**确保这些建议具有多样性，并且分配到本周不同的日期和餐别时段。优先为已识别的空缺时段生成建议。**
-4.  **分配日期/餐别：** 对于每个建议，**分配一个具体且有效的 'dayOfWeek'**（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）**和一个具体且有效的 'mealType'**（必须是 ${mealTypesInternal.join(', ')} 中的一个）。**确保分配覆盖不同的日期和餐别，不要都分配到同一个时段。**
-5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数且大于0（例如，0.1克或更多）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
-6.  **平衡：** 如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱（例如，如果上周肉类较多，建议更多素食选项）。
-7.  **格式化输出：** 严格按照 'GenerateWeeklyRecipesOutputSchema' 格式提供输出。每个建议的食谱必须包含 'name'（中文）、'description'（中文）、'dayOfWeek'（英文）、'mealType'（英文）和一个 'ingredients' 数组，其中每个成分都有 'name'（中文）和正数 'quantity'。如果适用，请包含整体的 'notes'（中文）。
+1.  **全覆盖生成：** 创建 **总共 21 个** 符合用户饮食需求和偏好（特别是中餐）的餐点建议。确保每个建议都分配到周一至周日的一个特定餐别时段（早餐、午餐 或 晚餐）。**每个时段必须有一个建议，不得遗漏。**
+2.  **多样性与平衡：** 确保这 21 个建议具有多样性，并考虑营养平衡。如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱。
+3.  **分配日期/餐别：** 对于每个建议，**分配一个具体且有效的 'dayOfWeek'**（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）**和一个具体且有效的 'mealType'**（必须是 ${mealTypesInternal.join(', ')} 中的一个）。**确保最终输出包含所有 7 天 x 3 餐 = 21 个独特的日期/餐别组合。**
+4.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数且大于 0（例如，0.1克或更多）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
+5.  **格式化输出：** 严格按照 'GenerateWeeklyRecipesOutputSchema' 格式提供输出。**最终的 'suggestedRecipes' 数组必须包含正好 21 个食谱对象。** 每个建议的食谱必须包含 'name'（中文）、'description'（中文）、'dayOfWeek'（英文）、'mealType'（英文）和一个 'ingredients' 数组，其中每个成分都有 'name'（中文）和正数 'quantity'。如果适用，请包含整体的 'notes'（中文）。
 `,
 });
 
@@ -171,6 +180,14 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
              throw new Error('AI 提示未能生成有效的输出结构。');
         }
         console.log("generateWeeklyRecipesPrompt parsed output:", output);
+
+        // Explicitly check if the output has the required 21 recipes AFTER getting the result.
+        if (!output.suggestedRecipes || output.suggestedRecipes.length !== 21) {
+            console.error(`AI did not return exactly 21 recipes. Received: ${output.suggestedRecipes?.length || 0}`);
+            throw new Error(`AI未能生成完整的每周21餐计划。收到的建议数量：${output.suggestedRecipes?.length || 0}`);
+        }
+
+
     } catch (aiError) {
        console.error("Error calling generateWeeklyRecipesPrompt:", aiError);
        const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);
@@ -188,7 +205,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
             console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
              throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
-        // Check for schema validation error from API (like exclusiveMinimum)
+        // Check for schema validation error from API (like exclusiveMinimum or length)
         if (errorMessage.includes('Invalid JSON payload') && errorMessage.includes('generation_config.response_schema')) {
             console.error("AI 返回了无效的 JSON 结构，与 Zod 模式不匹配。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
             throw new Error(`AI 提示执行失败：AI 返回的数据格式无效。${errorMessage}`);
@@ -199,11 +216,11 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
     }
 
 
-     // Validate AI output against Zod schema again for robustness, and provide fallbacks
+     // Validate AI output against Zod schema again for robustness, focusing on the length requirement.
      try {
-       // Ensure GeneratedIngredientSchema is used within GeneratedRecipeSchema for validation
+       // Ensure GenerateWeeklyRecipesOutputSchema checks for length 21
        const validatedOutput = GenerateWeeklyRecipesOutputSchema.parse(output);
-       console.log("Validated AI output:", validatedOutput);
+       console.log("Validated AI output (21 recipes expected):", validatedOutput);
 
        // Map dayOfWeek and mealType back to Chinese for the final Recipe object if needed elsewhere,
        // but the core logic now relies on English enums from the schema.
@@ -221,33 +238,25 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         return { ...validatedOutput, suggestedRecipes: translatedRecipes };
 
      } catch (validationError) {
-         console.error("AI output failed Zod validation:", validationError);
-         console.warn("AI output that failed validation:", output); // Log the invalid structure
+         if (validationError instanceof z.ZodError) {
+             console.error("AI output failed Zod validation:", validationError.issues);
+             // Check specifically for length error
+             const lengthIssue = validationError.issues.find(issue => issue.code === z.ZodIssueCode.too_small || issue.code === z.ZodIssueCode.too_big);
+              if (lengthIssue && lengthIssue.path.includes('suggestedRecipes')) {
+                 throw new Error(`AI未能生成完整的每周21餐计划。模式验证失败: ${lengthIssue.message}`);
+             }
+              throw new Error(`AI 输出未通过 Zod 验证: ${validationError.message}`);
+         } else {
+              console.error("Unknown validation error:", validationError);
+              throw new Error("验证 AI 输出时发生未知错误。");
+         }
+          console.warn("AI output that failed validation:", output); // Log the invalid structure
 
-         // Attempt to salvage: Filter valid recipes and provide default notes
-         const salvageableRecipes = (output?.suggestedRecipes || []).filter(recipe => {
-            try {
-                // Ensure generated ingredients are also validated using the updated schema
-                GeneratedRecipeSchema.parse(recipe);
-                return true;
-            } catch (recipeValidationError) {
-                console.warn(`Filtering out invalid suggested recipe: ${JSON.stringify(recipe)}. Error: ${recipeValidationError}`);
-                return false;
-            }
-         });
+         // Attempt to salvage - NOT IDEAL if length is the issue, better to throw.
+          // Consider if you want fallback behavior or always require 21 recipes.
+          // Returning partial data here might be confusing. For now, let the error propagate.
+          // throw new Error("AI 生成的食谱数量不正确或格式无效。");
 
-          // Map salvaged recipes' day/meal types if needed
-         const translatedSalvageableRecipes = salvageableRecipes.map(recipe => ({
-             ...recipe,
-             // dayOfWeek: daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek,
-             // mealType: mealTypesChineseMap[recipe.mealType] || recipe.mealType,
-         }));
-
-          return {
-              // suggestedRecipes: salvageableRecipes,
-               suggestedRecipes: translatedSalvageableRecipes,
-               notes: output?.notes || "AI 生成了食谱，但由于格式问题（尤其是成分或数量），某些食谱可能无效或不完整。"
-          };
      }
   }
 );
@@ -292,4 +301,5 @@ function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchem
 
 
     
+
 

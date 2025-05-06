@@ -472,7 +472,7 @@ export default function Home() {
          preferences: userPreferences.preferences || "未指定",
          previousWeekRecipes: previousWeekRecipesString,
          existingCurrentWeekRecipes: existingCurrentWeekRecipesString, // Add existing recipes
-         numberOfSuggestions: 7, // Or make this dynamic
+         // numberOfSuggestions removed as prompt now aims for 21
        };
 
        console.log("调用 generateWeeklyRecipes 流程，输入：", generationInput);
@@ -574,6 +574,8 @@ export default function Home() {
        console.error("在 triggerWeeklyGeneration 调用 generateWeeklyRecipes 时出错:", error);
         const errorMessage = error instanceof Error ? error.message : "食谱生成期间发生未知错误。";
         const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
+        const isSchemaError = errorMessage.includes("模式验证错误") || errorMessage.includes("AI 返回的数据格式无效");
+
 
        toast({
          title: "生成失败",
@@ -584,6 +586,11 @@ export default function Home() {
                     <AlertTriangle className="inline h-4 w-4 mr-1" />
                     API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
                   </>
+               ) : isSchemaError ? (
+                   <>
+                       <AlertTriangle className="inline h-4 w-4 mr-1" />
+                       {errorMessage} (AI 未能返回预期的 21 个食谱)
+                   </>
                ) : (
                   errorMessage
                )}
@@ -782,6 +789,7 @@ export default function Home() {
     </main>
   );
 }
+
 
 
 
