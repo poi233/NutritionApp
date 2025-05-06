@@ -34,33 +34,33 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
     <Table className="border shadow-md rounded-md overflow-hidden">
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">Day</TableHead>
-          {mealTypes.map(meal => (
-            <TableHead key={meal} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
-              {meal}
+          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">Meal</TableHead>
+          {daysOfWeek.map(day => (
+            <TableHead key={day} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
+              {day}
             </TableHead>
           ))}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {daysOfWeek.map(day => (
-          <TableRow key={day}>
-            {/* Sticky Day Name cell */}
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-middle min-h-[100px]">
-              {day}
+        {mealTypes.map(meal => (
+          <TableRow key={meal}>
+            {/* Sticky Meal Type cell */}
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-middle min-h-[120px]">
+              {meal}
             </TableCell>
-            {/* Recipe cells for the meals of the day */}
-            {mealTypes.map(meal => {
+            {/* Recipe cells for the days of the week */}
+            {daysOfWeek.map(day => {
               const recipe = getRecipeForSlot(day, meal);
               return (
-                <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[100px]"> {/* Use align-top */}
+                <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]"> {/* Use align-top */}
                   {recipe ? (
-                    <Card className="h-full flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[100px]"> {/* Added min-height */}
+                    <Card className="h-full flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[120px]"> {/* Added min-height */}
                       <CardHeader className="flex flex-row items-start justify-between p-2 pb-1">
                         <CardTitle className="text-sm font-medium leading-tight flex-1 mr-1 truncate">{recipe.name}</CardTitle>
                         <div className="flex items-center space-x-1">
                           {/* Info Popover */}
-                          {(recipe.description || recipe.calories !== undefined) && (
+                          {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -106,16 +106,18 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
                       </CardHeader>
                       {(recipe.ingredients && recipe.ingredients.length > 0) && (
                         <CardContent className="p-2 pt-0 text-xs text-muted-foreground overflow-hidden flex-1">
-                          {recipe.ingredients.slice(0, 2).map(ing => ing.name).join(', ')}{recipe.ingredients.length > 2 ? '...' : ''}
+                          {recipe.ingredients.slice(0, 3).map(ing => ing.name).join(', ')}{recipe.ingredients.length > 3 ? '...' : ''}
                         </CardContent>
                       )}
-                      {/* Optional Footer can be added here if needed */}
-                      {/* <CardFooter className="p-1 pt-0"> */}
-                      {/* e.g., <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} cal</p> */}
-                      {/* </CardFooter> */}
+                      {/* Display estimated calories in footer if available */}
+                      {recipe.calories !== undefined && (
+                         <CardFooter className="p-2 pt-0 mt-auto">
+                           <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} cal (est.)</p>
+                         </CardFooter>
+                       )}
                     </Card>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[100px]"> {/* Ensure min height */}
+                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[120px]"> {/* Ensure min height */}
                       Empty
                     </div>
                   )}
