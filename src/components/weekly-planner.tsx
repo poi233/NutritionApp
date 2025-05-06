@@ -62,23 +62,23 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     <Table className="border shadow-md rounded-md overflow-hidden">
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-           <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">餐别</TableHead> {/* Meal Type header */}
-          {daysOfWeek.map(day => (
-            <TableHead key={day} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
-              {day}
+           <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">日期</TableHead> {/* Day header */}
+          {mealTypes.map(meal => (
+            <TableHead key={meal} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
+              {meal}
             </TableHead>
           ))}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {mealTypes.map(meal => (
-          <TableRow key={meal}>
-            {/* Sticky Meal Type cell */}
+        {daysOfWeek.map(day => (
+          <TableRow key={day}>
+            {/* Sticky Day cell */}
             <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[120px]"> {/* Align top for consistency */}
-              {meal}
+              {day}
             </TableCell>
-            {/* Recipe cells for the days of the week */}
-            {daysOfWeek.map(day => {
+            {/* Recipe cells for the meal types */}
+            {mealTypes.map(meal => {
               const slotRecipes = getRecipesForSlot(day, meal);
               return (
                 <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]"> {/* Use align-top */}
@@ -135,12 +135,6 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                 </Button>
                               </div>
                             </CardHeader>
-                            {/* Only show ingredients preview if space allows, maybe not needed with popover */}
-                            {/* {(recipe.ingredients && recipe.ingredients.length > 0) && (
-                              <CardContent className="p-2 pt-0 text-xs text-muted-foreground overflow-hidden flex-1">
-                                {recipe.ingredients.slice(0, 2).map(ing => ing.name).join(', ')}{recipe.ingredients.length > 2 ? '...' : ''}
-                              </CardContent>
-                            )} */}
                             {/* Display estimated calories in footer if available */}
                             {recipe.calories !== undefined && (
                                <CardFooter className="p-2 pt-0 mt-auto">
@@ -164,3 +158,4 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
+
