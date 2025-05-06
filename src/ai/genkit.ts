@@ -33,7 +33,6 @@ export const ai = genkit({
      // defineDotprompt({ dir: path.join(__dirname, "../prompts") }), // Example if using .prompt files
   ],
   // Removed default model here, specify it in the prompt/generate call
-  // model: 'googleai/gemini-1.5-flash-latest', // Ensure this model exists or use a valid one
   logLevel: 'debug', // Enable detailed logging for development
   enableTracing: true, // Enable tracing for debugging flows
 });
