@@ -56,7 +56,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'gemini-1.5-flash-latest', // Specify the model to use
+  model: 'gemini-pro', // Changed model name
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -144,3 +144,4 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
      }
   }
 );
+
