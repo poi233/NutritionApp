@@ -56,12 +56,12 @@ if (googleApiKey) {
 }
 
 // List available models - ensure `ai` is initialized first
-if (ai) {
+if (ai && typeof ai.getAvailableModels === 'function') {
   ai.getAvailableModels().then(models => {
     console.log('[Genkit Init] Available Models:', models);
   }).catch(err => {
     console.error('[Genkit Init] Error getting available models:', err);
   });
 } else {
-  console.warn('[Genkit Init] Could not retrieve available models because Genkit AI object was not properly initialized.');
+  console.warn('[Genkit Init] Could not retrieve available models because Genkit AI object was not properly initialized or getAvailableModels function is missing.');
 }
