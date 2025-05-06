@@ -500,7 +500,7 @@ export default function Home() {
   return (
     <main className="container mx-auto p-4 md:p-8 flex flex-col items-center min-h-screen bg-background">
       {/* Header and Week Navigation */}
-      <div className="flex items-center justify-center mb-6 w-full max-w-6xl">
+      <div className="flex items-center justify-center mb-6 w-full max-w-7xl"> {/* Increased max-width */}
         <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="Previous Week" disabled={!isClient}>
            <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -516,9 +516,9 @@ export default function Home() {
       </div>
 
       {/* Main Content Area */}
-      <div className="w-full max-w-6xl space-y-8">
+      <div className="w-full max-w-7xl space-y-8"> {/* Increased max-width */}
 
-        {/* Weekly Planner Grid */}
+        {/* Weekly Planner Table */}
          {isClient ? (
             <WeeklyPlanner
                 recipes={currentWeekRecipes}
