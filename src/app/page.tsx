@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import {
   Dialog,
@@ -43,8 +43,12 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
 
     for (const ingredient of recipe.ingredients) {
         try {
+          // Use a default quantity if missing (though the form requires it)
+          const quantity = ingredient.quantity || 0;
+          if (quantity <= 0) continue; // Skip if quantity is zero or less
+
           const nutrition = await getNutrition(ingredient.name);
-          const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
+          const factor = quantity / 100; // Assuming nutrition data is per 100g
 
           totalCalories += (nutrition.calories || 0) * factor;
           totalProtein += (nutrition.protein || 0) * factor;
@@ -70,45 +74,77 @@ export default function Home() {
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(getWeekStartDate(new Date()));
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
-  // Removed generatedRecipes state, will add directly to weeklyRecipes
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "" });
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
   const [isAddRecipeDialogOpen, setIsAddRecipeDialogOpen] = useState(false); // State for dialog
+  const [isClient, setIsClient] = useState(false); // Track client-side rendering
   const { toast } = useToast();
+
+  // Track client-side rendering to avoid hydration mismatches with localStorage
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Derived state for recipes of the current week
   const currentWeekRecipes = useMemo(() => {
+       if (!isClient) return []; // Return empty array on server
       return weeklyRecipes[currentWeekStartDate] || [];
-  }, [weeklyRecipes, currentWeekStartDate]);
+  }, [weeklyRecipes, currentWeekStartDate, isClient]);
 
-  // Load data from localStorage on initial render
-  useEffect(() => {
-    const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
-    const storedPreferences = localStorage.getItem("nutrijournal_preferences");
-    if (storedWeeklyRecipes) {
-      setWeeklyRecipes(JSON.parse(storedWeeklyRecipes));
-    }
-     if (storedPreferences) {
-      setUserPreferences(JSON.parse(storedPreferences));
-    }
-    // Set current week based on today's date
-    setCurrentWeekStartDate(getWeekStartDate(new Date()));
-  }, []);
-
-  // Save weekly recipes to localStorage whenever they change
-  useEffect(() => {
-    if (Object.keys(weeklyRecipes).length > 0) {
-      localStorage.setItem("nutrijournal_weekly_recipes", JSON.stringify(weeklyRecipes));
-    } else {
-       localStorage.removeItem("nutrijournal_weekly_recipes"); // Clear if empty
-    }
-  }, [weeklyRecipes]);
-
-   // Save preferences to localStorage whenever they change
+  // Load data from localStorage on initial client-side render
    useEffect(() => {
-    localStorage.setItem("nutrijournal_preferences", JSON.stringify(userPreferences));
-   }, [userPreferences]);
+     if (isClient) {
+       try {
+         const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
+         const storedPreferences = localStorage.getItem("nutrijournal_preferences");
+         if (storedWeeklyRecipes) {
+           setWeeklyRecipes(JSON.parse(storedWeeklyRecipes));
+         }
+         if (storedPreferences) {
+           setUserPreferences(JSON.parse(storedPreferences));
+         }
+       } catch (error) {
+         console.error("Error loading data from localStorage:", error);
+         toast({
+           title: "Error Loading Data",
+           description: "Could not load saved plans or preferences.",
+           variant: "destructive",
+         });
+       }
+       // Set current week based on today's date only on client
+       setCurrentWeekStartDate(getWeekStartDate(new Date()));
+     }
+   }, [isClient, toast]); // Add toast dependency
+
+
+  // Save weekly recipes to localStorage whenever they change (only on client)
+  useEffect(() => {
+     if (isClient) {
+       try {
+          if (Object.keys(weeklyRecipes).length > 0) {
+             localStorage.setItem("nutrijournal_weekly_recipes", JSON.stringify(weeklyRecipes));
+           } else {
+              localStorage.removeItem("nutrijournal_weekly_recipes"); // Clear if empty
+           }
+       } catch (error) {
+          console.error("Error saving weekly recipes to localStorage:", error);
+          // Optional: Show a toast, but might be too noisy
+       }
+     }
+  }, [weeklyRecipes, isClient]);
+
+   // Save preferences to localStorage whenever they change (only on client)
+   useEffect(() => {
+     if (isClient) {
+        try {
+             localStorage.setItem("nutrijournal_preferences", JSON.stringify(userPreferences));
+        } catch (error) {
+             console.error("Error saving preferences to localStorage:", error);
+              // Optional: Show a toast
+        }
+     }
+   }, [userPreferences, isClient]);
 
    // Clear analysis when week changes
    useEffect(() => {
@@ -125,9 +161,14 @@ export default function Home() {
    };
 
    const formatWeekDisplay = (startDate: string): string => {
-      const start = parseISO(startDate);
-      const end = endOfWeek(start, { weekStartsOn: 1 });
-      return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
+      try {
+        const start = parseISO(startDate);
+        const end = endOfWeek(start, { weekStartsOn: 1 });
+        return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
+      } catch (error) {
+          console.error("Error formatting week display:", error);
+          return "Invalid Date"; // Fallback for invalid date string
+      }
    }
 
    // --- Recipe Management ---
@@ -137,15 +178,35 @@ export default function Home() {
         ...newRecipeData,
         id: recipeId,
         weekStartDate: currentWeekStartDate,
-        ingredients: newRecipeData.ingredients.map((ing, index) => ({
+        ingredients: newRecipeData.ingredients
+          .filter(ing => ing.name && ing.quantity > 0) // Filter out empty/invalid ingredients before processing
+          .map((ing, index) => ({
             ...ing,
-            id: `ingredient-${recipeId}-${index}`
-        }))
+            id: `ingredient-${recipeId}-${index}`,
+            quantity: Number(ing.quantity) || 0, // Ensure quantity is a number
+          })),
+        // Initialize nutrition fields
+        calories: undefined,
+        protein: undefined,
+        fat: undefined,
+        carbohydrates: undefined,
+        description: newRecipeData.description || "", // Ensure description exists
     };
 
-    // Estimate nutrition if ingredients are present
+    // Estimate nutrition only if valid ingredients are present
     if (newRecipe.ingredients.length > 0) {
+      try {
         newRecipe = await estimateRecipeNutrition(newRecipe);
+      } catch (error) {
+        console.error("Error estimating nutrition during recipe add:", error);
+        toast({
+           title: "Nutrition Estimation Failed",
+           description: "Could not estimate nutrition for the added meal.",
+           variant: "destructive",
+        });
+      }
+    } else {
+        console.log(`Recipe "${newRecipe.name}" added without ingredients, skipping nutrition estimation.`);
     }
 
     setWeeklyRecipes((prevWeekly => {
@@ -159,7 +220,7 @@ export default function Home() {
       title: "Meal Added",
       description: `${newRecipe.name} for ${newRecipe.dayOfWeek} ${newRecipe.mealType} has been added.`,
     });
-  }, [currentWeekStartDate, toast]);
+  }, [currentWeekStartDate, toast]); // Add toast dependency
 
   const handleDeleteRecipe = (recipeId: string) => {
      let deletedRecipeName = "Meal"; // Default name
@@ -170,13 +231,15 @@ export default function Home() {
             deletedRecipeName = recipeToDelete.name;
         }
         const updatedWeek = weekRecipes.filter(recipe => recipe.id !== recipeId);
+         // Check if the entire weeklyRecipes object should become empty
          if (updatedWeek.length === 0 && Object.keys(prevWeekly).length === 1 && prevWeekly[currentWeekStartDate]) {
-             // If this was the only week and it's now empty, return empty object
-             return {};
+             return {}; // Reset to empty object
          } else if (updatedWeek.length === 0) {
-              const { [currentWeekStartDate]: _, ...rest } = prevWeekly; // Remove week if empty
+              // Remove just the current week's key if it becomes empty
+              const { [currentWeekStartDate]: _, ...rest } = prevWeekly;
               return rest;
          }
+        // Otherwise, update the specific week
         return { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
      });
       // Clear previous analysis/recommendations when a recipe is deleted from the current week
@@ -209,11 +272,11 @@ export default function Home() {
     }
 
     // Ensure all recipes have ingredients for analysis
-    const recipesWithIngredients = currentWeekRecipes.filter(r => r.ingredients && r.ingredients.length > 0);
+    const recipesWithIngredients = currentWeekRecipes.filter(r => r.ingredients && r.ingredients.length > 0 && r.ingredients.some(i => i.quantity > 0));
     if (recipesWithIngredients.length === 0) {
         toast({
             title: "No Ingredients",
-            description: "Analysis requires recipes with ingredients. Please add ingredients to your meals.",
+            description: "Analysis requires meals with ingredients and quantities. Please add details to your meals.",
             variant: "destructive",
         });
         return;
@@ -221,7 +284,7 @@ export default function Home() {
      if (recipesWithIngredients.length < currentWeekRecipes.length) {
         toast({
             title: "Partial Analysis",
-            description: "Some meals without ingredients will be excluded from the analysis.",
+            description: "Some meals without ingredients (or with zero quantity) will be excluded from the analysis.",
             variant: "default", // Use default variant for informational messages
         });
     }
@@ -231,18 +294,33 @@ export default function Home() {
     setNutritionalAnalysis(null); // Clear previous analysis
 
     try {
-       // Use only recipes with ingredients for the AI input
+       // Prepare input for the AI flow
        const analysisInput: AnalyzeNutritionalBalanceInput = {
          recipes: recipesWithIngredients.map(r => ({
            name: `${r.name} (${r.dayOfWeek} ${r.mealType})`, // Add context to name
-           ingredients: r.ingredients.map(i => ({ name: i.name, quantity: i.quantity })),
-         })),
+           ingredients: r.ingredients
+                        .filter(i => i.name && i.quantity > 0) // Ensure valid ingredients
+                        .map(i => ({ name: i.name, quantity: i.quantity })),
+         })).filter(r => r.ingredients.length > 0), // Ensure recipe has valid ingredients after filtering
        };
+
+       // Check if there are still recipes to analyze after filtering
+       if (analysisInput.recipes.length === 0) {
+           toast({
+               title: "No Valid Ingredients for Analysis",
+               description: "None of the meals had ingredients with valid names and quantities greater than zero.",
+               variant: "destructive",
+           });
+           setIsLoadingAnalysis(false);
+           return;
+       }
+
+
        const result = await analyzeNutritionalBalance(analysisInput);
 
-       // Optionally, update the main recipes state with calculated nutrition if not already present
-       // This requires matching the analysis output back to the original recipes
-       // For simplicity now, just display the analysis separately.
+        if (!result || !result.nutritionalInsights) {
+             throw new Error("Analysis completed but returned invalid data.");
+         }
 
        setNutritionalAnalysis(result);
        toast({
@@ -251,29 +329,66 @@ export default function Home() {
        });
     } catch (error) {
        console.error("Error analyzing nutrition:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during analysis.";
+        // Check for specific API key error (example, adjust based on actual error message)
+        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID");
+
        toast({
          title: "Analysis Failed",
-         description: "Could not generate nutritional analysis. Please try again.",
+         description: (
+             <>
+                {isApiKeyError ? (
+                    <>
+                        <AlertTriangle className="inline h-4 w-4 mr-1" />
+                        Please ensure your Google AI API key is set correctly in the .env file and the server is restarted.
+                    </>
+                ) : (
+                    errorMessage
+                )}
+                <br /> Check server logs for more details.
+             </>
+         ),
          variant: "destructive",
+         duration: 8000,
        });
         setNutritionalAnalysis(null); // Ensure it stays null on error
     } finally {
        setIsLoadingAnalysis(false);
     }
-  }, [currentWeekRecipes, toast]);
+  }, [currentWeekRecipes, toast]); // Added toast dependency
 
 
   const triggerWeeklyGeneration = useCallback(async () => {
     setIsLoadingGeneration(true);
 
-    // Find previous week's recipes
-    const previousWeekStartDate = getWeekStartDate(subWeeks(parseISO(currentWeekStartDate), 1));
-    const previousWeekRecipes = weeklyRecipes[previousWeekStartDate] || [];
-    const previousWeekRecipesString = previousWeekRecipes.length > 0
-        ? previousWeekRecipes.map(recipe =>
-             `Day: ${recipe.dayOfWeek}, Meal: ${recipe.mealType}, Recipe: ${recipe.name}\n${recipe.ingredients.length > 0 ? `Ingredients:\n${recipe.ingredients.map(ing => `- ${ing.name} (${ing.quantity}g)`).join('\n')}` : '(No ingredients listed)'}`
-           ).join('\n\n')
-        : undefined; // Pass undefined if no recipes last week
+    let previousWeekRecipesString: string | undefined = undefined;
+    try {
+        // Find previous week's recipes
+        const previousWeekStartDate = getWeekStartDate(subWeeks(parseISO(currentWeekStartDate), 1));
+        const previousWeekRecipes = weeklyRecipes[previousWeekStartDate] || [];
+        previousWeekRecipesString = previousWeekRecipes.length > 0
+            ? previousWeekRecipes.map(recipe =>
+                 `Day: ${recipe.dayOfWeek}, Meal: ${recipe.mealType}, Recipe: ${recipe.name}\n${recipe.ingredients && recipe.ingredients.length > 0 ? `Ingredients:\n${recipe.ingredients.filter(i=>i.name && i.quantity>0).map(ing => `- ${ing.name} (${ing.quantity}g)`).join('\n')}` : '(No ingredients listed)'}`
+               ).join('\n\n')
+            : undefined; // Pass undefined if no recipes last week
+    } catch (error) {
+        console.error("Error processing previous week's recipes:", error);
+        // Decide if you want to proceed without previous week context or show an error
+        // toast({ title: "Warning", description: "Could not process previous week's recipes.", variant: "default" });
+    }
+
+    let existingCurrentWeekRecipesString: string | undefined = undefined;
+    try {
+        // Get existing recipes for the current week
+        const existingRecipes = weeklyRecipes[currentWeekStartDate] || [];
+        existingCurrentWeekRecipesString = existingRecipes.length > 0
+            ? existingRecipes.map(recipe =>
+                `Day: ${recipe.dayOfWeek}, Meal: ${recipe.mealType}, Recipe: ${recipe.name}`
+              ).join('\n')
+            : undefined;
+    } catch (error) {
+         console.error("Error processing current week's recipes:", error);
+    }
 
     try {
        const generationInput: GenerateWeeklyRecipesInput = {
@@ -281,35 +396,45 @@ export default function Home() {
          dietaryNeeds: userPreferences.dietaryNeeds || "None specified",
          preferences: userPreferences.preferences || "None specified",
          previousWeekRecipes: previousWeekRecipesString,
+         existingCurrentWeekRecipes: existingCurrentWeekRecipesString, // Add existing recipes
+         numberOfSuggestions: 7, // Or make this dynamic
        };
 
       const result = await generateWeeklyRecipes(generationInput);
 
+       if (!result || !result.suggestedRecipes) {
+         throw new Error("Recipe generation returned invalid data.");
+       }
+
+
       // Add generated recipes to the current week's plan
-      if (result && result.suggestedRecipes.length > 0) {
-         const generatedToAdd: Recipe[] = result.suggestedRecipes.map(genRecipe => {
+      if (result.suggestedRecipes.length > 0) {
+         const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe) => {
            const recipeId = `recipe-gen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-           // Attempt to parse day/meal or assign defaults
-           // Basic parsing - might need refinement based on AI output format
-           let dayOfWeek = daysOfWeek[Math.floor(Math.random() * daysOfWeek.length)]; // Random day as fallback
-           let mealType = mealTypes[Math.floor(Math.random() * mealTypes.length)]; // Random meal as fallback
-           let name = genRecipe.name;
 
-            // Example: Check if name contains day/meal clues
-            const nameLower = name.toLowerCase();
-            daysOfWeek.forEach(day => { if (nameLower.includes(day.toLowerCase())) dayOfWeek = day; });
-            mealTypes.forEach(meal => { if (nameLower.includes(meal.toLowerCase())) mealType = meal; });
+            // Basic validation for day/meal from AI
+           const validDay = daysOfWeek.includes(genRecipe.dayOfWeek) ? genRecipe.dayOfWeek : daysOfWeek[0]; // Default to Monday
+           const validMeal = mealTypes.includes(genRecipe.mealType) ? genRecipe.mealType : mealTypes[1]; // Default to Lunch
 
-           return {
+           let recipe: Recipe = {
              id: recipeId,
-             name: name,
-             description: genRecipe.description,
+             name: genRecipe.name || "Generated Meal",
+             description: genRecipe.description || "AI suggested meal.",
              ingredients: [], // Generated recipes initially have no ingredients defined
              weekStartDate: currentWeekStartDate,
-             dayOfWeek: dayOfWeek,
-             mealType: mealType,
+             dayOfWeek: validDay,
+             mealType: validMeal,
+             calories: undefined, // Initialize nutrition fields
+             protein: undefined,
+             fat: undefined,
+             carbohydrates: undefined,
            };
+            // Note: Nutrition estimation won't run here as ingredients are empty.
+           // User would need to edit the meal to add ingredients for estimation.
+           return recipe;
          });
+
+         const generatedToAdd = await Promise.all(generatedToAddPromises);
 
           setWeeklyRecipes((prevWeekly) => {
              const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
@@ -318,7 +443,7 @@ export default function Home() {
 
            toast({
               title: "Recipes Generated & Added",
-              description: `${generatedToAdd.length} new meal ideas added to your planner for this week! You can edit or remove them.`,
+              description: `${generatedToAdd.length} new meal ideas added. Add ingredients to estimate nutrition.`,
               duration: 5000, // Longer duration
            });
            // Also show any notes from the generation
@@ -332,35 +457,53 @@ export default function Home() {
       } else {
            toast({
              title: "No Suggestions Generated",
-             description: "The AI couldn't generate suggestions based on the input. Try adjusting preferences.",
+             description: "The AI couldn't generate suggestions based on the current plan and preferences.",
            });
       }
 
     } catch (error) {
-      console.error("Error generating weekly recipes:", error);
-      toast({
-        title: "Generation Failed",
-        description: "Could not generate weekly recipe suggestions. Please try again.",
-        variant: "destructive",
-      });
+       console.error("Error generating weekly recipes:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during recipe generation.";
+        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID");
+
+       toast({
+         title: "Generation Failed",
+         description: (
+             <>
+               {isApiKeyError ? (
+                  <>
+                    <AlertTriangle className="inline h-4 w-4 mr-1" />
+                    Please ensure your Google AI API key is set correctly in the .env file and the server is restarted.
+                  </>
+               ) : (
+                  errorMessage
+               )}
+               <br /> Check server logs for more details.
+             </>
+          ),
+         variant: "destructive",
+         duration: 8000,
+       });
     } finally {
       setIsLoadingGeneration(false);
     }
-  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast]);
+  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast]); // Added toast dependency
 
 
   return (
     <main className="container mx-auto p-4 md:p-8 flex flex-col items-center min-h-screen bg-background">
       {/* Header and Week Navigation */}
       <div className="flex items-center justify-center mb-6 w-full max-w-6xl">
-        <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="Previous Week">
+        <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="Previous Week" disabled={!isClient}>
            <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2 mx-4 flex-1 justify-center">
            <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary" />
-            <span className="whitespace-nowrap">{formatWeekDisplay(currentWeekStartDate)}</span>
+            <span className="whitespace-nowrap">
+                {isClient ? formatWeekDisplay(currentWeekStartDate) : 'Loading week...'}
+            </span>
         </h1>
-        <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="Next Week">
+        <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="Next Week" disabled={!isClient}>
            <ArrowRight className="h-5 w-5" />
         </Button>
       </div>
@@ -369,22 +512,29 @@ export default function Home() {
       <div className="w-full max-w-6xl space-y-8">
 
         {/* Weekly Planner Grid */}
-        <WeeklyPlanner
-            recipes={currentWeekRecipes}
-            onDeleteRecipe={handleDeleteRecipe}
-            daysOfWeek={daysOfWeek}
-            mealTypes={mealTypes}
-         />
+         {isClient ? (
+            <WeeklyPlanner
+                recipes={currentWeekRecipes}
+                onDeleteRecipe={handleDeleteRecipe}
+                daysOfWeek={daysOfWeek}
+                mealTypes={mealTypes}
+            />
+         ) : (
+            <div className="w-full h-64 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                Loading Planner...
+            </div> // Placeholder while client loads
+         )}
+
 
          {/* Action Buttons */}
          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
             <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
               <DialogTrigger asChild>
-                 <Button variant="outline" className="w-full justify-center">
+                 <Button variant="outline" className="w-full justify-center" disabled={!isClient}>
                     <PlusSquare className="mr-2 h-4 w-4" /> Add Meal Manually
                  </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] md:max-w-lg">
+              <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
                  <DialogHeader>
                    <DialogTitle>Add a New Meal</DialogTitle>
                  </DialogHeader>
@@ -395,7 +545,7 @@ export default function Home() {
 
               <Button
                  onClick={triggerAnalysis}
-                 disabled={isLoadingAnalysis || currentWeekRecipes.length === 0}
+                 disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                >
                  {isLoadingAnalysis ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
@@ -403,7 +553,7 @@ export default function Home() {
               </Button>
                <Button
                  onClick={triggerWeeklyGeneration}
-                 disabled={isLoadingGeneration}
+                 disabled={!isClient || isLoadingGeneration}
                  className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
                >
                   {isLoadingGeneration ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ChefHat className="mr-2 h-4 w-4" />}
@@ -415,10 +565,22 @@ export default function Home() {
         {/* Collapsible Sections for Analysis and Preferences */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
            {/* Nutritional Analysis */}
-           <NutritionalAnalysis analysis={nutritionalAnalysis} isLoading={isLoadingAnalysis} weekStartDate={currentWeekStartDate} />
+           {isClient ? (
+                <NutritionalAnalysis analysis={nutritionalAnalysis} isLoading={isLoadingAnalysis} weekStartDate={currentWeekStartDate} />
+            ) : (
+                 <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                     Loading Analysis...
+                 </div>
+            )}
 
            {/* Preferences Form */}
-           <PreferencesForm onSubmitPreferences={handleUpdatePreferences} defaultValues={userPreferences} />
+           {isClient ? (
+                <PreferencesForm onSubmitPreferences={handleUpdatePreferences} defaultValues={userPreferences} />
+            ) : (
+                 <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                     Loading Preferences...
+                 </div>
+            )}
         </div>
 
       </div>

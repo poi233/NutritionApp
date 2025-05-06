@@ -35,7 +35,15 @@ const GenerateWeeklyRecipesOutputSchema = z.object({
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
 
 export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): Promise<GenerateWeeklyRecipesOutput> {
-  return generateWeeklyRecipesFlow(input);
+   // The flow execution might throw errors (e.g., API key issues, network problems)
+   // We catch them here to prevent unhandled promise rejections.
+   try {
+     return await generateWeeklyRecipesFlow(input);
+   } catch (error) {
+     console.error("Error executing generateWeeklyRecipesFlow:", error);
+     // Re-throw the error so the client-side catch block can handle it
+     throw new Error(`Failed to generate weekly recipes: ${error instanceof Error ? error.message : String(error)}`);
+   }
 }
 
 const prompt = ai.definePrompt({
@@ -59,8 +67,8 @@ Consider the following user information:
 **Instructions:**
 1.  **Analyze:** Look at the previous week's meals (if provided) and the meals already planned for the current week (if provided).
 2.  **Identify Gaps:** Determine which days/meal slots are empty in the current week.
-3.  **Generate Suggestions:** Create {{numberOfSuggestions}} meal suggestions that fit the user's dietary needs and preferences. Prioritize filling the identified gaps.
-4.  **Assign Day/Meal:** For EACH suggestion, assign a specific 'dayOfWeek' and 'mealType'. Aim for variety across the week.
+3.  **Generate Suggestions:** Create {{numberOfSuggestions}} meal suggestions that fit the user's dietary needs and preferences. Prioritize filling the identified gaps. Ensure variety.
+4.  **Assign Day/Meal:** For EACH suggestion, assign a valid 'dayOfWeek' (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday) and 'mealType' (Breakfast, Lunch, Dinner, Snack). Be specific.
 5.  **Balance:** If previous week's meals are provided, try to suggest recipes that complement or balance the previous week's nutritional profile (e.g., if last week was heavy on meat, suggest more vegetarian options).
 6.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', and 'mealType'. Include overall 'notes' if applicable.
 `,
@@ -74,16 +82,26 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
     outputSchema: GenerateWeeklyRecipesOutputSchema,
   },
   async (input) => {
-    const { output } = await prompt(input);
-    // Add basic validation or default values if needed
-    if (!output) {
-       return { suggestedRecipes: [], notes: 'Could not generate suggestions.' };
+    let output: GenerateWeeklyRecipesOutput | null = null;
+    try {
+        const promptResult = await prompt(input);
+        output = promptResult.output; // Access output directly
+
+        if (!output) {
+            console.error('generateWeeklyRecipesPrompt returned null or undefined output.');
+            throw new Error('AI prompt failed to generate a valid output structure.');
+        }
+    } catch (aiError) {
+       console.error("Error calling generateWeeklyRecipesPrompt:", aiError);
+       throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
     }
+
+
      // Ensure each suggested recipe has a valid day and meal type, provide fallbacks if necessary
-     const validatedRecipes = output.suggestedRecipes.map(recipe => ({
+     const validatedRecipes = (output.suggestedRecipes || []).map(recipe => ({
        ...recipe,
-       dayOfWeek: recipe.dayOfWeek || 'Monday', // Fallback example
-       mealType: recipe.mealType || 'Lunch',   // Fallback example
+       dayOfWeek: recipe.dayOfWeek || 'Monday', // Fallback example - Ideally AI provides this
+       mealType: recipe.mealType || 'Lunch',   // Fallback example - Ideally AI provides this
      }));
 
      return { suggestedRecipes: validatedRecipes, notes: output.notes };

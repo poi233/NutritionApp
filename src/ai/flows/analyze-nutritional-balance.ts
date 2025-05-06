@@ -51,7 +51,16 @@ const AnalyzeNutritionalBalanceOutputSchema = z.object({
 export type AnalyzeNutritionalBalanceOutput = z.infer<typeof AnalyzeNutritionalBalanceOutputSchema>;
 
 export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalanceInput): Promise<AnalyzeNutritionalBalanceOutput> {
-  return analyzeNutritionalBalanceFlow(input);
+  // The flow execution might throw errors (e.g., API key issues, network problems)
+  // We catch them here to prevent unhandled promise rejections.
+  try {
+      return await analyzeNutritionalBalanceFlow(input);
+  } catch (error) {
+      console.error("Error executing analyzeNutritionalBalanceFlow:", error);
+      // Re-throw the error so the client-side catch block can handle it
+      // Or return a specific error structure if needed
+      throw new Error(`Failed to analyze nutritional balance: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 // Note: The prompt now receives recipe names with context
@@ -96,54 +105,69 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
     outputSchema: AnalyzeNutritionalBalanceOutputSchema,
   },
   async input => {
-    // 1. Calculate nutrition for each recipe first
-    const calculatedNutrition = await Promise.all(
-      input.recipes.map(async recipe => {
-        let totalCalories = 0;
-        let totalProtein = 0;
-        let totalFat = 0;
-        let totalCarbohydrates = 0;
+    try {
+        // 1. Calculate nutrition for each recipe first
+        const calculatedNutrition = await Promise.all(
+          input.recipes.map(async recipe => {
+            let totalCalories = 0;
+            let totalProtein = 0;
+            let totalFat = 0;
+            let totalCarbohydrates = 0;
 
-        for (const ingredient of recipe.ingredients) {
-           try {
-              const nutrition = await getNutrition(ingredient.name);
-              const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
+            for (const ingredient of recipe.ingredients) {
+               try {
+                  const nutrition = await getNutrition(ingredient.name);
+                  const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
 
-              totalCalories += (nutrition.calories || 0) * factor;
-              totalProtein += (nutrition.protein || 0) * factor;
-              totalFat += (nutrition.fat || 0) * factor;
-              totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
-            } catch (error) {
-                 console.warn(`Could not get nutrition for ingredient "${ingredient.name}" during analysis calculation:`, error);
-             }
+                  totalCalories += (nutrition.calories || 0) * factor;
+                  totalProtein += (nutrition.protein || 0) * factor;
+                  totalFat += (nutrition.fat || 0) * factor;
+                  totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
+                } catch (error) {
+                     console.warn(`Could not get nutrition for ingredient "${ingredient.name}" during analysis calculation:`, error);
+                 }
+            }
+
+            return {
+              name: recipe.name, // Use the contextual name provided in input
+              totalCalories: parseFloat(totalCalories.toFixed(0)),
+              totalProtein: parseFloat(totalProtein.toFixed(1)),
+              totalFat: parseFloat(totalFat.toFixed(1)),
+              totalCarbohydrates: parseFloat(totalCarbohydrates.toFixed(1)),
+            };
+          })
+        );
+
+        // 2. Prepare input for the AI prompt, including the calculated data
+        const promptInput = {
+          calculatedNutrition: calculatedNutrition,
+          originalInput: input, // Pass the original input for context if needed by the prompt
+        };
+
+        // 3. Call the AI prompt with the combined data
+        // Add specific try-catch for the AI call
+        let output: AnalyzeNutritionalBalanceOutput | null = null;
+        try {
+            const promptResult = await analyzeNutritionalBalancePrompt(promptInput);
+            output = promptResult.output; // Access output directly
+            if (!output) {
+                 console.error('analyzeNutritionalBalancePrompt returned null or undefined output.');
+                 throw new Error('AI prompt failed to generate a valid output structure.');
+            }
+        } catch (aiError) {
+            console.error("Error calling analyzeNutritionalBalancePrompt:", aiError);
+            throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
         }
 
+        // 4. Return the result.
         return {
-          name: recipe.name, // Use the contextual name provided in input
-          totalCalories: parseFloat(totalCalories.toFixed(0)),
-          totalProtein: parseFloat(totalProtein.toFixed(1)),
-          totalFat: parseFloat(totalFat.toFixed(1)),
-          totalCarbohydrates: parseFloat(totalCarbohydrates.toFixed(1)),
+          analyzedRecipes: output?.analyzedRecipes && output.analyzedRecipes.length > 0 ? output.analyzedRecipes : calculatedNutrition,
+          nutritionalInsights: output.nutritionalInsights, // Assume insights are always generated if output is valid
         };
-      })
-    );
-
-    // 2. Prepare input for the AI prompt, including the calculated data
-    const promptInput = {
-      calculatedNutrition: calculatedNutrition,
-      originalInput: input, // Pass the original input for context if needed by the prompt
-    };
-
-    // 3. Call the AI prompt with the combined data
-    const { output } = await analyzeNutritionalBalancePrompt(promptInput);
-
-    // 4. Return the result. The AI's main task is the insights.
-    //    The analyzedRecipes part should ideally come directly from the AI's interpretation
-    //    of the calculatedNutrition passed in, or we can just return our calculation.
-    //    Let's trust the AI to return it based on the input structure, but fallback to our calculation.
-    return {
-      analyzedRecipes: output?.analyzedRecipes && output.analyzedRecipes.length > 0 ? output.analyzedRecipes : calculatedNutrition,
-      nutritionalInsights: output!.nutritionalInsights, // Assume insights are always generated
-    };
+    } catch (flowError) {
+        console.error("Error within analyzeNutritionalBalanceFlow logic:", flowError);
+        // Re-throw to be caught by the outer handler in the exported function
+        throw flowError;
+    }
   }
 );
