@@ -25,8 +25,9 @@ interface WeeklyPlannerProps {
 
 export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe, daysOfWeek, mealTypes }) => {
 
-  const getRecipeForSlot = (day: string, meal: string): Recipe | undefined => {
-    return recipes.find(r => r.dayOfWeek === day && r.mealType === meal);
+  // Get all recipes for a specific day and meal type
+  const getRecipesForSlot = (day: string, meal: string): Recipe[] => {
+    return recipes.filter(r => r.dayOfWeek === day && r.mealType === meal);
   };
 
   return (
@@ -46,81 +47,87 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
         {mealTypes.map(meal => (
           <TableRow key={meal}>
             {/* Sticky Meal Type cell */}
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-middle min-h-[120px]">
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[120px]"> {/* Align top for consistency */}
               {meal}
             </TableCell>
             {/* Recipe cells for the days of the week */}
             {daysOfWeek.map(day => {
-              const recipe = getRecipeForSlot(day, meal);
+              const slotRecipes = getRecipesForSlot(day, meal);
               return (
                 <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]"> {/* Use align-top */}
-                  {recipe ? (
-                    <Card className="h-full flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[120px]"> {/* Added min-height */}
-                      <CardHeader className="flex flex-row items-start justify-between p-2 pb-1">
-                        <CardTitle className="text-sm font-medium leading-tight flex-1 mr-1 truncate">{recipe.name}</CardTitle>
-                        <div className="flex items-center space-x-1">
-                          {/* Info Popover */}
-                          {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                                  <Info className="h-3 w-3" />
-                                  <span className="sr-only">Details for {recipe.name}</span>
+                  {/* Container for multiple recipe cards */}
+                  <div className="space-y-2">
+                     {slotRecipes.length > 0 ? (
+                       slotRecipes.map(recipe => (
+                          <Card key={recipe.id} className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[80px]"> {/* Adjusted min-height for multiple cards */}
+                            <CardHeader className="flex flex-row items-start justify-between p-2 pb-1">
+                              <CardTitle className="text-sm font-medium leading-tight flex-1 mr-1 truncate">{recipe.name}</CardTitle>
+                              <div className="flex items-center space-x-1">
+                                {/* Info Popover */}
+                                {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                                        <Info className="h-3 w-3" />
+                                        <span className="sr-only">Details for {recipe.name}</span>
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-60 text-sm p-3 max-h-[300px] overflow-y-auto">
+                                      {recipe.description && <p className="mb-2"><strong>Description:</strong> {recipe.description}</p>}
+                                      {recipe.calories !== undefined && (
+                                        <div className="space-y-1">
+                                          <p><strong>Nutrition (Est.):</strong></p>
+                                          <p>Calories: {recipe.calories.toLocaleString()}</p>
+                                          <p>Protein: {recipe.protein?.toFixed(1)}g</p>
+                                          <p>Fat: {recipe.fat?.toFixed(1)}g</p>
+                                          <p>Carbs: {recipe.carbohydrates?.toFixed(1)}g</p>
+                                        </div>
+                                      )}
+                                      {(recipe.ingredients && recipe.ingredients.length > 0) && (
+                                          <div className="mt-2 pt-2 border-t">
+                                              <p><strong>Ingredients:</strong></p>
+                                              <ul className="list-disc pl-4 text-xs"> {/* Smaller text for ingredients list */}
+                                                  {recipe.ingredients.map(ing => (
+                                                      <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}g)</li>
+                                                  ))}
+                                              </ul>
+                                          </div>
+                                      )}
+                                    </PopoverContent>
+                                  </Popover>
+                                )}
+                                {/* Delete Button */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onDeleteRecipe(recipe.id)}
+                                  className="h-5 w-5 text-destructive hover:bg-destructive/10"
+                                  aria-label={`Delete ${recipe.name}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
                                 </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-60 text-sm p-3">
-                                {recipe.description && <p className="mb-2"><strong>Description:</strong> {recipe.description}</p>}
-                                {recipe.calories !== undefined && (
-                                  <div className="space-y-1">
-                                    <p><strong>Nutrition (Est.):</strong></p>
-                                    <p>Calories: {recipe.calories.toLocaleString()}</p>
-                                    <p>Protein: {recipe.protein?.toFixed(1)}g</p>
-                                    <p>Fat: {recipe.fat?.toFixed(1)}g</p>
-                                    <p>Carbs: {recipe.carbohydrates?.toFixed(1)}g</p>
-                                  </div>
-                                )}
-                                {(recipe.ingredients && recipe.ingredients.length > 0) && (
-                                    <div className="mt-2 pt-2 border-t">
-                                        <p><strong>Ingredients:</strong></p>
-                                        <ul className="list-disc pl-4">
-                                            {recipe.ingredients.map(ing => (
-                                                <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}g)</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                              </PopoverContent>
-                            </Popover>
-                          )}
-                          {/* Delete Button */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onDeleteRecipe(recipe.id)}
-                            className="h-5 w-5 text-destructive hover:bg-destructive/10"
-                            aria-label={`Delete ${recipe.name}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      {(recipe.ingredients && recipe.ingredients.length > 0) && (
-                        <CardContent className="p-2 pt-0 text-xs text-muted-foreground overflow-hidden flex-1">
-                          {recipe.ingredients.slice(0, 3).map(ing => ing.name).join(', ')}{recipe.ingredients.length > 3 ? '...' : ''}
-                        </CardContent>
-                      )}
-                      {/* Display estimated calories in footer if available */}
-                      {recipe.calories !== undefined && (
-                         <CardFooter className="p-2 pt-0 mt-auto">
-                           <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} cal (est.)</p>
-                         </CardFooter>
-                       )}
-                    </Card>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[120px]"> {/* Ensure min height */}
-                      Empty
-                    </div>
-                  )}
+                              </div>
+                            </CardHeader>
+                            {/* Only show ingredients preview if space allows, maybe not needed with popover */}
+                            {/* {(recipe.ingredients && recipe.ingredients.length > 0) && (
+                              <CardContent className="p-2 pt-0 text-xs text-muted-foreground overflow-hidden flex-1">
+                                {recipe.ingredients.slice(0, 2).map(ing => ing.name).join(', ')}{recipe.ingredients.length > 2 ? '...' : ''}
+                              </CardContent>
+                            )} */}
+                            {/* Display estimated calories in footer if available */}
+                            {recipe.calories !== undefined && (
+                               <CardFooter className="p-2 pt-0 mt-auto">
+                                 <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} cal (est.)</p>
+                               </CardFooter>
+                             )}
+                          </Card>
+                        ))
+                     ) : (
+                       <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[80px]"> {/* Ensure min height for empty slots */}
+                         Empty
+                       </div>
+                     )}
+                   </div>
                 </TableCell>
               );
             })}
@@ -128,7 +135,5 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
         ))}
       </TableBody>
     </Table>
-    // ScrollArea might not be needed as Table wrapper handles overflow
-    // <ScrollArea className="w-full whitespace-nowrap rounded-md border shadow-md"> ... </ScrollArea>
   );
 };

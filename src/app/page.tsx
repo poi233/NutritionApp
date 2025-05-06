@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2 } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import {
   Dialog,
@@ -19,6 +19,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { getNutrition } from "@/services/nutrition"; // Import nutrition service
 
 interface UserPreferences {
@@ -84,18 +95,21 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
 
 export default function Home() {
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
-  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(getWeekStartDate(new Date()));
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(() => getWeekStartDate(new Date())); // Initialize directly
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "" });
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
   const [isAddRecipeDialogOpen, setIsAddRecipeDialogOpen] = useState(false); // State for dialog
+  const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false); // State for clear week confirmation
   const [isClient, setIsClient] = useState(false); // Track client-side rendering
   const { toast } = useToast();
 
   // Track client-side rendering to avoid hydration mismatches with localStorage
   useEffect(() => {
     setIsClient(true);
+    // Set initial week start date on client mount
+    setCurrentWeekStartDate(getWeekStartDate(new Date()));
   }, []);
 
   // Derived state for recipes of the current week
@@ -124,8 +138,6 @@ export default function Home() {
            variant: "destructive",
          });
        }
-       // Set current week based on today's date only on client
-       setCurrentWeekStartDate(getWeekStartDate(new Date()));
      }
    }, [isClient, toast]); // Add toast dependency
 
@@ -165,10 +177,12 @@ export default function Home() {
 
    // --- Week Navigation ---
    const goToPreviousWeek = () => {
+      if (!isClient) return; // Prevent server-side execution
       setCurrentWeekStartDate(prev => getWeekStartDate(subWeeks(parseISO(prev), 1)));
    };
 
    const goToNextWeek = () => {
+      if (!isClient) return; // Prevent server-side execution
       setCurrentWeekStartDate(prev => getWeekStartDate(addWeeks(parseISO(prev), 1)));
    };
 
@@ -185,6 +199,7 @@ export default function Home() {
 
    // --- Recipe Management ---
    const handleAddRecipe = useCallback(async (newRecipeData: RecipeFormData) => {
+    if (!isClient) return;
     const recipeId = `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`; // More robust ID
     let newRecipe: Recipe = {
         ...newRecipeData,
@@ -234,9 +249,10 @@ export default function Home() {
       title: "Meal Added",
       description: `${newRecipe.name} for ${newRecipe.dayOfWeek} ${newRecipe.mealType} has been added.`,
     });
-  }, [currentWeekStartDate, toast]); // Add toast dependency
+  }, [currentWeekStartDate, toast, isClient]); // Added toast dependency
 
   const handleDeleteRecipe = (recipeId: string) => {
+     if (!isClient) return;
      let deletedRecipeName = "Meal"; // Default name
      setWeeklyRecipes((prevWeekly) => {
         const weekRecipes = prevWeekly[currentWeekStartDate] || [];
@@ -245,12 +261,14 @@ export default function Home() {
             deletedRecipeName = recipeToDelete.name;
         }
         const updatedWeek = weekRecipes.filter(recipe => recipe.id !== recipeId);
-         // Check if the entire weeklyRecipes object should become empty
-         if (updatedWeek.length === 0 && Object.keys(prevWeekly).length === 1 && prevWeekly[currentWeekStartDate]) {
-             return {}; // Reset to empty object
-         } else if (updatedWeek.length === 0) {
+         // Check if the entire weeklyRecipes object should become empty after removing the week's key
+         if (updatedWeek.length === 0) {
               // Remove just the current week's key if it becomes empty
               const { [currentWeekStartDate]: _, ...rest } = prevWeekly;
+              // If removing the week makes the whole object empty
+              if (Object.keys(rest).length === 0) {
+                  return {}; // Reset to empty object
+              }
               return rest;
          }
         // Otherwise, update the specific week
@@ -265,8 +283,28 @@ export default function Home() {
       });
   };
 
+  const handleRemoveAllRecipes = useCallback(() => {
+       if (!isClient) return;
+        setWeeklyRecipes((prevWeekly) => {
+            const { [currentWeekStartDate]: _, ...rest } = prevWeekly;
+            // If removing the week makes the whole object empty
+             if (Object.keys(rest).length === 0) {
+                return {}; // Reset to empty object
+             }
+            return rest;
+        });
+        setNutritionalAnalysis(null); // Clear analysis as well
+        setIsClearWeekDialogOpen(false); // Close dialog
+        toast({
+            title: "Week Cleared",
+            description: `All meals for the week starting ${format(parseISO(currentWeekStartDate), 'MMM d')} have been removed.`,
+            variant: "destructive",
+        });
+   }, [currentWeekStartDate, toast, isClient]); // Add dependencies
+
   // --- Preferences ---
   const handleUpdatePreferences = (data: UserPreferences) => {
+    if (!isClient) return;
     setUserPreferences(data);
     toast({
       title: "Preferences Updated",
@@ -276,6 +314,7 @@ export default function Home() {
 
   // --- AI Features ---
   const triggerAnalysis = useCallback(async () => {
+    if (!isClient) return;
     if (currentWeekRecipes.length === 0) {
       toast({
         title: "No Meals",
@@ -371,10 +410,11 @@ export default function Home() {
     } finally {
        setIsLoadingAnalysis(false);
     }
-  }, [currentWeekRecipes, toast]); // Added toast dependency
+  }, [currentWeekRecipes, toast, isClient]); // Added toast dependency
 
 
   const triggerWeeklyGeneration = useCallback(async () => {
+    if (!isClient) return;
     setIsLoadingGeneration(true);
 
     let previousWeekRecipesString: string | undefined = undefined;
@@ -497,6 +537,8 @@ export default function Home() {
                  duration: 6000,
               });
            }
+           // Clear analysis after generating new meals
+           setNutritionalAnalysis(null);
       } else {
            toast({
              title: "No Suggestions Generated",
@@ -530,7 +572,7 @@ export default function Home() {
     } finally {
       setIsLoadingGeneration(false);
     }
-  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast]); // Added toast dependency
+  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast, isClient]); // Added toast dependency
 
 
   return (
@@ -570,22 +612,23 @@ export default function Home() {
 
 
          {/* Action Buttons */}
-         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-            <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
-              <DialogTrigger asChild>
-                 <Button variant="outline" className="w-full justify-center" disabled={!isClient}>
-                    <PlusSquare className="mr-2 h-4 w-4" /> Add Meal Manually
-                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
-                 <DialogHeader>
-                   <DialogTitle>Add a New Meal</DialogTitle>
-                 </DialogHeader>
-                 {/* Pass the callback and week start date */}
-                 <RecipeInputForm onAddRecipe={handleAddRecipe} currentWeekStartDate={currentWeekStartDate} />
-               </DialogContent>
-             </Dialog>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+             {/* Add Meal Dialog */}
+             <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
+               <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full justify-center" disabled={!isClient}>
+                     <PlusSquare className="mr-2 h-4 w-4" /> Add Meal Manually
+                  </Button>
+               </DialogTrigger>
+               <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Add a New Meal</DialogTitle>
+                  </DialogHeader>
+                  <RecipeInputForm onAddRecipe={handleAddRecipe} currentWeekStartDate={currentWeekStartDate} />
+                </DialogContent>
+              </Dialog>
 
+              {/* Analyze Nutrition Button */}
               <Button
                  onClick={triggerAnalysis}
                  disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
@@ -594,6 +637,8 @@ export default function Home() {
                  {isLoadingAnalysis ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
                  Analyze Nutrition
               </Button>
+
+              {/* Generate Meal Ideas Button */}
                <Button
                  onClick={triggerWeeklyGeneration}
                  disabled={!isClient || isLoadingGeneration}
@@ -602,6 +647,34 @@ export default function Home() {
                   {isLoadingGeneration ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ChefHat className="mr-2 h-4 w-4" />}
                  Generate Meal Ideas
                </Button>
+
+                {/* Remove All Recipes Button */}
+                <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                     <Button
+                       variant="destructive"
+                       className="w-full justify-center"
+                       disabled={!isClient || currentWeekRecipes.length === 0} // Disable if no recipes to remove
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Remove All Meals
+                     </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete all meals planned for the week starting {isClient ? format(parseISO(currentWeekStartDate), 'MMM d') : 'this week'}.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>Cancel</AlertDialogCancel>
+                      {/* Confirmation action calls the handler */}
+                      <AlertDialogAction onClick={handleRemoveAllRecipes}>
+                         Continue
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                 </AlertDialog>
            </div>
 
 
@@ -630,4 +703,3 @@ export default function Home() {
     </main>
   );
 }
-
