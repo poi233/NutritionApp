@@ -391,7 +391,7 @@ export default function Home() {
 
         if (!result || !result.nutritionalInsights) {
              console.error("分析完成，但返回无效的数据结构:", result);
-             throw new Error("分析完成，但返回无效的数据。");
+              throw new Error("分析完成，但返回无效的数据。");
          }
 
        setNutritionalAnalysis(result);
@@ -401,18 +401,18 @@ export default function Home() {
        });
     } catch (error) {
        console.error("在 triggerAnalysis 调用 analyzeNutritionalBalance 时出错:", error);
+        // Error messages are now translated in the flow itself
         const errorMessage = error instanceof Error ? error.message : "分析期间发生未知错误。";
-        // Check for specific API key error (example, adjust based on actual error message)
-        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
 
        toast({
          title: "分析失败",
          description: (
              <>
-                {isApiKeyError ? (
+                {/* Check for API key error using the translated message */}
+                {errorMessage.includes("无效的 Google AI API 密钥") ? (
                     <>
                         <AlertTriangle className="inline h-4 w-4 mr-1" />
-                        API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
+                         API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
                     </>
                 ) : (
                     errorMessage
@@ -481,7 +481,7 @@ export default function Home() {
 
        if (!result || !result.suggestedRecipes) {
           console.error("食谱生成返回无效的数据结构:", result);
-          throw new Error("食谱生成返回无效的数据。");
+           throw new Error("食谱生成返回无效的数据。");
        }
 
 
@@ -544,6 +544,8 @@ export default function Home() {
          const generatedToAdd = await Promise.all(generatedToAddPromises);
 
           setWeeklyRecipes((prevWeekly) => {
+             // Make sure to replace existing meals for the same day/slot if needed, or just add
+             // For simplicity, this adds to the existing list. Consider replacing logic if needed.
              const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
              return { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
           });
@@ -572,8 +574,9 @@ export default function Home() {
 
     } catch (error) {
        console.error("在 triggerWeeklyGeneration 调用 generateWeeklyRecipes 时出错:", error);
-        const errorMessage = error instanceof Error ? error.message : "食谱生成期间发生未知错误。";
-        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
+       // Error messages are translated in the flow itself
+       const errorMessage = error instanceof Error ? error.message : "食谱生成期间发生未知错误。";
+        const isApiKeyError = errorMessage.includes("无效的 Google AI API 密钥");
         const isSchemaError = errorMessage.includes("模式验证错误") || errorMessage.includes("AI 返回的数据格式无效");
 
 
@@ -584,7 +587,7 @@ export default function Home() {
                {isApiKeyError ? (
                   <>
                     <AlertTriangle className="inline h-4 w-4 mr-1" />
-                    API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
+                     API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
                   </>
                ) : isSchemaError ? (
                    <>
@@ -789,7 +792,3 @@ export default function Home() {
     </main>
   );
 }
-
-
-
-
