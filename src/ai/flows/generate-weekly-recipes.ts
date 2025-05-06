@@ -73,7 +73,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
    // The flow execution might throw errors (e.g., API key issues, network problems)
    // We catch them here to prevent unhandled promise rejections.
    try {
-      console.log("Entering generateWeeklyRecipes function with input:", input);
+      console.log("Entering generateWeeklyRecipes function with input:", JSON.stringify(input, null, 2));
       // Explicitly add/ensure Chinese preference if not already strongly specified
        const preferencesWithChinese = input.preferences ?
           (input.preferences.toLowerCase().includes('chinese') || input.preferences.includes('中餐') ? input.preferences : `${input.preferences}, prefers Chinese food (偏爱中餐)`)
@@ -81,13 +81,13 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 
       const modifiedInput = { ...input, preferences: preferencesWithChinese };
-      console.log("Modified input for prompt (emphasizing Chinese):", modifiedInput);
+      console.log("Modified input for prompt (emphasizing Chinese):", JSON.stringify(modifiedInput, null, 2));
 
       const result = await generateWeeklyRecipesFlow(modifiedInput);
-      console.log("generateWeeklyRecipesFlow returned successfully:", result);
+      console.log("generateWeeklyRecipesFlow returned successfully.");
       return result;
    } catch (error) {
-     console.error("Error executing generateWeeklyRecipes function:", error);
+     console.error(`Error executing generateWeeklyRecipes function for input: ${JSON.stringify(input, null, 2)}`, error);
      const errorMessage = error instanceof Error ? error.message : String(error);
 
      // Provide a more specific error message for API key issues
@@ -103,11 +103,20 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
           throw new Error(`生成每周食谱失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
      }
 
-      // Check for schema validation error (like length mismatch)
-     if (error instanceof z.ZodError) {
-         console.error("AI output failed Zod validation:", error.issues);
-         throw new Error(`生成每周食谱失败：AI 返回的数据格式无效或不完整。模式验证错误: ${error.message}`);
-     }
+      // Check for schema validation error (like length mismatch or complex constraints)
+      if (error instanceof z.ZodError) {
+          console.error("AI output failed Zod validation:", error.issues);
+          // Customize message if it's specifically about the number of recipes
+          const lengthIssue = error.issues.find(issue =>
+               (issue.code === z.ZodIssueCode.too_small || issue.code === z.ZodIssueCode.too_big) &&
+               issue.path.includes('suggestedRecipes')
+          );
+          if (lengthIssue) {
+              throw new Error(`生成每周食谱失败：AI 未能生成完整的每周21餐计划。模式验证失败: ${lengthIssue.message}`);
+          }
+          throw new Error(`生成每周食谱失败：AI 返回的数据格式无效或不完整。模式验证错误: ${error.message}`);
+      }
+      // Check for specific API errors related to schema complexity or bad JSON
       if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema') || errorMessage.includes("too many states")) {
            console.error("AI 返回了无效的 JSON 结构或模式过于复杂。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
            throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
@@ -131,9 +140,9 @@ const mealTypesChineseMap: { [key: string]: string } = {
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash',
+  model: 'googleai/gemini-1.5-flash', // Consistent model name
   input: { schema: GenerateWeeklyRecipesInputSchema },
-  output: { schema: GenerateWeeklyRecipesOutputSchema },
+  output: { schema: GenerateWeeklyRecipesOutputSchema }, // Use the schema with relaxed constraints for the API call
   // Updated prompt to request Chinese output, use internal English day/meal names, and exclude snacks.
   // Explicitly request a recipe for EVERY meal slot (21 total).
   prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成一个完整的每周食谱计划。**目标是为周一至周日的每一餐（早餐、午餐、晚餐）提供一个具体的食谱建议，总共 21 个食谱。** 输出语言必须为简体中文。
@@ -164,14 +173,14 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
   {
     name: 'generateWeeklyRecipesFlow',
     inputSchema: GenerateWeeklyRecipesInputSchema,
-    outputSchema: GenerateWeeklyRecipesOutputSchema,
+    outputSchema: GenerateWeeklyRecipesOutputSchema, // Use relaxed schema for API interaction
   },
   async (input) => {
-    console.log("Entering generateWeeklyRecipesFlow with input:", input);
+    console.log("Entering generateWeeklyRecipesFlow with input:", JSON.stringify(input, null, 2));
     let output: GenerateWeeklyRecipesOutput | null = null;
     try {
         console.log("Calling generateWeeklyRecipesPrompt...");
-        console.log("Prompt input:", JSON.stringify(input, null, 2)); // Log input sent to AI
+        // console.log("Prompt input being sent to AI:", JSON.stringify(input, null, 2)); // Log input sent to AI
         const promptResult = await prompt(input);
         console.log("generateWeeklyRecipesPrompt raw result:", promptResult); // Log raw result
         output = promptResult.output; // Access output directly
@@ -180,13 +189,15 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
             console.error('generateWeeklyRecipesPrompt returned null or undefined output.');
              throw new Error('AI 提示未能生成有效的输出结构。');
         }
-        console.log("generateWeeklyRecipesPrompt parsed output:", output);
+        console.log("generateWeeklyRecipesPrompt parsed output:", JSON.stringify(output, null, 2));
 
-        // Explicitly check if the output has the required 21 recipes AFTER getting the result.
-        if (!output.suggestedRecipes || output.suggestedRecipes.length !== 21) {
-            console.error(`AI did not return exactly 21 recipes. Received: ${output.suggestedRecipes?.length || 0}`);
-            throw new Error(`AI未能生成完整的每周21餐计划。收到的建议数量：${output.suggestedRecipes?.length || 0}`);
-        }
+        // Basic validation: Check if suggestedRecipes exists and is an array
+         if (!output.suggestedRecipes || !Array.isArray(output.suggestedRecipes)) {
+            console.error('AI output structure is missing suggestedRecipes array. Output received:', output);
+            throw new Error('AI 返回的数据结构缺少 suggestedRecipes 数组。');
+         }
+
+         // Stricter validation happens after successful AI call
 
 
     } catch (aiError) {
@@ -207,7 +218,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
              throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
         // Check for schema validation error from API (like exclusiveMinimum or length, or "too many states")
-        if (errorMessage.includes('Invalid JSON payload') && (errorMessage.includes('generation_config.response_schema') || errorMessage.includes('too many states'))) {
+        if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('generation_config.response_schema') || errorMessage.includes('too many states')) {
             console.error("AI 返回了无效的 JSON 结构或 Zod 模式过于复杂。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
             throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
         }
@@ -219,41 +230,46 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
 
      // Validate AI output against Zod schema again for robustness.
      // Even though we relaxed the schema for the API call, we still expect 21 recipes from the prompt logic.
-     // We can use a stricter schema here for internal validation if desired, or just check length directly.
+     // We use a stricter schema here for internal validation.
      try {
-       // Temporary schema for validation, ensuring 21 recipes.
-       const StrictGenerateWeeklyRecipesOutputSchema = GenerateWeeklyRecipesOutputSchema.extend({
-          suggestedRecipes: z.array(GeneratedRecipeSchema).length(21, "AI 未能生成完整的每周21餐计划。"),
+       // Temporary schema for validation, ensuring 21 recipes and other constraints.
+       const StrictGenerateWeeklyRecipesOutputSchema = z.object({
+           suggestedRecipes: z.array(GeneratedRecipeSchema)
+               .length(21, `AI 未能生成完整的每周21餐计划。收到的建议数量: ${output.suggestedRecipes?.length ?? 0}`)
+               .describe('Strict validation: Expecting exactly 21 recipes.'),
+           notes: z.string().optional(),
        });
 
+       console.log("Validating AI output structure strictly (expecting 21 recipes)...");
        const validatedOutput = StrictGenerateWeeklyRecipesOutputSchema.parse(output);
-       console.log("Validated AI output (21 recipes expected):", validatedOutput);
+       console.log("Validated AI output (21 recipes confirmed):", validatedOutput);
 
        // Map dayOfWeek and mealType back to Chinese for the final Recipe object if needed elsewhere,
        // but the core logic now relies on English enums from the schema.
-       const translatedRecipes = validatedOutput.suggestedRecipes.map(recipe => ({
-            ...recipe,
-            // dayOfWeek: daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek,
-            // mealType: mealTypesChineseMap[recipe.mealType] || recipe.mealType,
-       }));
+       // No need to translate here as the final conversion function handles it.
+       // const translatedRecipes = validatedOutput.suggestedRecipes.map(recipe => ({
+       //      ...recipe,
+       // }));
 
 
-        return { ...validatedOutput, suggestedRecipes: translatedRecipes };
+        return validatedOutput; // Return the strictly validated output
 
      } catch (validationError) {
          if (validationError instanceof z.ZodError) {
-             console.error("AI output failed Zod validation (expected 21 recipes):", validationError.issues);
+             console.error("AI output failed strict Zod validation (expected 21 recipes):", validationError.issues);
              // Check specifically for length error
              const lengthIssue = validationError.issues.find(issue =>
                  (issue.code === z.ZodIssueCode.too_small || issue.code === z.ZodIssueCode.too_big) &&
                  issue.path.includes('suggestedRecipes')
              );
               if (lengthIssue) {
-                 throw new Error(`AI未能生成完整的每周21餐计划。模式验证失败: ${lengthIssue.message}`);
+                 // Use the message from the strict schema definition
+                 throw new Error(lengthIssue.message || `AI未能生成完整的每周21餐计划。模式验证失败`);
              }
-              throw new Error(`AI 输出未通过 Zod 验证: ${validationError.message}`);
+              // Throw a general validation error message
+             throw new Error(`AI 输出未通过最终的 Zod 验证: ${validationError.message}`);
          } else {
-              console.error("Unknown validation error:", validationError);
+              console.error("Unknown validation error during strict check:", validationError);
               throw new Error("验证 AI 输出时发生未知错误。");
          }
      }
@@ -297,3 +313,4 @@ function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchem
          carbohydrates: undefined,
      };
 }
+

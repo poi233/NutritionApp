@@ -64,12 +64,12 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
   // The flow execution might throw errors (e.g., API key issues, network problems)
   // We catch them here to prevent unhandled promise rejections.
   try {
-      console.log("Entering analyzeNutritionalBalance function with input:", input);
+      console.log("Entering analyzeNutritionalBalance function with input:", JSON.stringify(input, null, 2));
       const result = await analyzeNutritionalBalanceFlow(input);
-      console.log("analyzeNutritionalBalanceFlow returned successfully:", result);
+      console.log("analyzeNutritionalBalanceFlow returned successfully.");
       return result;
   } catch (error) {
-      console.error("Error executing analyzeNutritionalBalance function:", error);
+      console.error(`Error executing analyzeNutritionalBalance function for input: ${JSON.stringify(input, null, 2)}`, error);
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Provide a more specific error message for API key issues
@@ -78,6 +78,13 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
           // Translate error message
            throw new Error(`分析营养平衡失败：无效的 Google AI API 密钥或身份验证错误。请检查 GOOGLE_API_KEY 环境变量并确保其正确且有效。原始错误: ${errorMessage}`);
       }
+
+      // Check for model not found specifically
+      if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
+         const modelNameUsed = analyzeNutritionalBalancePrompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+         console.error(`analyzeNutritionalBalancePrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
+         throw new Error(`分析营养平衡失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
+     }
 
       // Re-throw other errors (translated)
        throw new Error(`分析营养平衡失败: ${errorMessage}`);
@@ -129,42 +136,59 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
     outputSchema: AnalyzeNutritionalBalanceOutputSchema,
   },
   async input => {
-    console.log("Entering analyzeNutritionalBalanceFlow with input:", input);
+    console.log("Entering analyzeNutritionalBalanceFlow with input:", JSON.stringify(input, null, 2));
     try {
         // 1. Calculate nutrition for each recipe first
         console.log("Calculating nutrition for recipes...");
-        const calculatedNutrition = await Promise.all(
-          input.recipes.map(async recipe => {
-            let totalCalories = 0;
-            let totalProtein = 0;
-            let totalFat = 0;
-            let totalCarbohydrates = 0;
+        const calculatedNutritionPromises = input.recipes.map(async recipe => {
+           let totalCalories = 0;
+           let totalProtein = 0;
+           let totalFat = 0;
+           let totalCarbohydrates = 0;
 
-            for (const ingredient of recipe.ingredients) {
-               try {
-                  // console.log(`Fetching nutrition for ingredient: ${ingredient.name}`); // Verbose logging
-                  const nutrition = await getNutrition(ingredient.name);
-                  const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
+           // Ensure ingredients array exists before iterating
+           if (!Array.isArray(recipe.ingredients)) {
+                console.warn(`Recipe "${recipe.name}" has missing or invalid ingredients array. Skipping nutrition calculation for this recipe.`);
+                return {
+                    name: recipe.name, // Still return the name
+                    totalCalories: 0,
+                    totalProtein: 0,
+                    totalFat: 0,
+                    totalCarbohydrates: 0,
+                };
+           }
 
-                  totalCalories += (nutrition.calories || 0) * factor;
-                  totalProtein += (nutrition.protein || 0) * factor;
-                  totalFat += (nutrition.fat || 0) * factor;
-                  totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
-                } catch (error) {
-                     // Log specific ingredient error
-                     console.warn(`Could not get nutrition for ingredient "${ingredient.name}" in recipe "${recipe.name}" during analysis calculation:`, error);
+           for (const ingredient of recipe.ingredients) {
+              try {
+                 // Validate ingredient structure
+                 if (!ingredient || typeof ingredient.name !== 'string' || typeof ingredient.quantity !== 'number' || ingredient.quantity <= 0) {
+                     console.warn(`Invalid ingredient structure or quantity in recipe "${recipe.name}":`, ingredient);
+                     continue; // Skip this invalid ingredient
                  }
-            }
+                 // console.log(`Fetching nutrition for ingredient: ${ingredient.name}`); // Verbose logging
+                 const nutrition = await getNutrition(ingredient.name);
+                 const factor = ingredient.quantity / 100; // Assuming nutrition data is per 100g
 
-            return {
-              name: recipe.name, // Use the contextual name provided in input
-              totalCalories: parseFloat(totalCalories.toFixed(0)),
-              totalProtein: parseFloat(totalProtein.toFixed(1)),
-              totalFat: parseFloat(totalFat.toFixed(1)),
-              totalCarbohydrates: parseFloat(totalCarbohydrates.toFixed(1)),
-            };
-          })
-        );
+                 totalCalories += (nutrition.calories || 0) * factor;
+                 totalProtein += (nutrition.protein || 0) * factor;
+                 totalFat += (nutrition.fat || 0) * factor;
+                 totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
+               } catch (error) {
+                    // Log specific ingredient error but continue calculation
+                    console.warn(`Could not get nutrition for ingredient "${ingredient.name}" (Quantity: ${ingredient.quantity}) in recipe "${recipe.name}" during analysis calculation:`, error);
+                }
+           }
+
+           return {
+             name: recipe.name, // Use the contextual name provided in input
+             totalCalories: parseFloat(totalCalories.toFixed(0)),
+             totalProtein: parseFloat(totalProtein.toFixed(1)),
+             totalFat: parseFloat(totalFat.toFixed(1)),
+             totalCarbohydrates: parseFloat(totalCarbohydrates.toFixed(1)),
+           };
+         });
+
+        const calculatedNutrition = await Promise.all(calculatedNutritionPromises);
         console.log("Calculated nutrition:", calculatedNutrition);
 
         // 2. Prepare input for the AI prompt, including the calculated data
@@ -182,12 +206,20 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             const promptResult = await analyzeNutritionalBalancePrompt(promptInput);
             console.log("analyzeNutritionalBalancePrompt raw result:", promptResult); // Log the raw result
             output = promptResult.output; // Access output directly
+
             if (!output) {
                  console.error('analyzeNutritionalBalancePrompt returned null or undefined output.');
                   // Translate error message
                   throw new Error('AI 提示未能生成有效的输出结构。');
             }
              console.log("analyzeNutritionalBalancePrompt parsed output:", output);
+
+             // Additional validation: Check if the output structure is as expected
+             if (!output.nutritionalInsights || !Array.isArray(output.analyzedRecipes)) {
+                 console.error('AI output structure is missing required fields (nutritionalInsights or analyzedRecipes). Output received:', output);
+                  throw new Error('AI 返回的数据结构不完整或无效。');
+             }
+
         } catch (aiError) {
             console.error("Error calling analyzeNutritionalBalancePrompt:", aiError);
             const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);
@@ -201,7 +233,7 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             // Check for model not found error specifically
             if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
                // Ensure model name logged matches the one used
-               const modelName = ai.getModel('googleai/gemini-1.5-flash').name || '未知模型'; // Attempt to get model name
+               const modelName = analyzeNutritionalBalancePrompt.model?.name || '未知模型'; // Attempt to get model name
                console.error(`analyzeNutritionalBalancePrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
                 // Translate error message
                 throw new Error(`AI 提示执行失败：模型 ('${modelName}') 未找到。${errorMessage}`);
@@ -211,10 +243,10 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
         }
 
         // 4. Return the result. Ensure the structure matches the schema.
-        // If AI provides analyzedRecipes, use that. Otherwise, fall back to our calculatedNutrition.
-        const finalAnalyzedRecipes = (output?.analyzedRecipes && output.analyzedRecipes.length > 0)
-            ? output.analyzedRecipes
-            : calculatedNutrition;
+        // Use our calculatedNutrition as the source of truth for the breakdown.
+        // The AI might reformat or slightly alter values, leading to discrepancies.
+        // We primarily want the AI's textual insights.
+        const finalAnalyzedRecipes = calculatedNutrition; // Use our calculation
 
         // Ensure insights object exists, provide a default if AI failed to generate it but didn't throw
          const finalInsights = output.nutritionalInsights || {
