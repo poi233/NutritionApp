@@ -74,7 +74,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'gemini-1.5-flash-latest', // Correct, available model name
+  model: 'googleai/gemini-1.5-flash-latest', // Use googleai/ prefix for Genkit Google AI plugin
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -134,7 +134,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
              throw new Error(`AI prompt execution failed: Invalid Google AI API Key or Authentication Error. ${errorMessage}`);
         }
         // Check for model not found error specifically
-        if (errorMessage.includes('Model') && errorMessage.includes('not found')) {
+        if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
             console.error(`The specified model in generateWeeklyRecipesPrompt ('${prompt.model?.name}') was not found or is invalid.`);
             throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
         }

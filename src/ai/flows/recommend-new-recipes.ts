@@ -46,7 +46,7 @@ export async function recommendNewRecipes(input: RecommendNewRecipesInput): Prom
   } catch (error) {
       console.error("Error executing recommendNewRecipes function:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const isModelError = errorMessage.includes('Model') && errorMessage.includes('not found');
+      const isModelError = errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'));
 
       let userFriendlyMessage = `Failed to recommend recipes: ${errorMessage}`;
 
@@ -63,7 +63,7 @@ export async function recommendNewRecipes(input: RecommendNewRecipesInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'recommendNewRecipesPrompt',
-  model: 'gemini-1.5-flash-latest', // Correct, available model name
+  model: 'googleai/gemini-1.5-flash-latest', // Use googleai/ prefix for Genkit Google AI plugin
   input: {schema: RecommendNewRecipesInputSchema},
   output: {schema: RecommendNewRecipesOutputSchema},
   prompt: `You are a recipe recommendation expert. You will recommend new recipes based on the dietary needs and preferences of the user.

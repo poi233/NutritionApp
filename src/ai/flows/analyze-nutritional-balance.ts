@@ -86,7 +86,7 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 // Note: The prompt now receives recipe names with context
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
-  model: 'gemini-1.5-flash-latest', // Correct, available model name
+  model: 'googleai/gemini-1.5-flash-latest', // Use googleai/ prefix for Genkit Google AI plugin
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -195,7 +195,7 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
                  throw new Error(`AI prompt execution failed: Invalid Google AI API Key or Authentication Error. ${errorMessage}`);
             }
             // Check for model not found error specifically
-            if (errorMessage.includes('Model') && errorMessage.includes('not found')) {
+            if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
                console.error(`The specified model in analyzeNutritionalBalancePrompt ('${analyzeNutritionalBalancePrompt.model?.name}') was not found or is invalid.`);
                throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
             }
