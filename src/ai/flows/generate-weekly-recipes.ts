@@ -8,7 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import type { Recipe } from '@/types/recipe'; // Import Recipe type
 
 // Keep English internally for consistency, will translate in UI or prompt
@@ -51,8 +51,9 @@ export type GenerateWeeklyRecipesInput = z.infer<typeof GenerateWeeklyRecipesInp
 
 // Output Schema: Use the updated GeneratedRecipeSchema which expects Chinese names/descriptions
 const GenerateWeeklyRecipesOutputSchema = z.object({
-  // Expect exactly 21 recipes (3 meals * 7 days)
-  suggestedRecipes: z.array(GeneratedRecipeSchema).length(21, "需要提供完整的每周21餐建议").describe('A list of 21 suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week (one for each Breakfast, Lunch, Dinner slot from Monday to Sunday). Recipe names and descriptions should be in Chinese.'),
+  // Relaxed constraint from .length(21) to .min(1) for the API call.
+  // The prompt still asks for 21, and the flow logic will verify this.
+  suggestedRecipes: z.array(GeneratedRecipeSchema).min(1, "至少需要一个建议食谱").describe('A list of suggested recipes (ideally 21 for a full week) with their assigned day, meal type, and estimated ingredients for the specified week. Recipe names and descriptions should be in Chinese.'),
   notes: z.string().optional().describe('Any additional notes or comments on the suggestions (in Chinese), e.g., regarding nutritional balance or variety.'), // Specify Chinese notes
 });
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
@@ -107,9 +108,9 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
          console.error("AI output failed Zod validation:", error.issues);
          throw new Error(`生成每周食谱失败：AI 返回的数据格式无效或不完整。模式验证错误: ${error.message}`);
      }
-      if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema')) {
-           console.error("AI 返回了无效的 JSON 结构，与 Zod 模式不匹配。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
-           throw new Error(`AI 提示执行失败：AI 返回的数据格式无效。${errorMessage}`);
+      if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema') || errorMessage.includes("too many states")) {
+           console.error("AI 返回了无效的 JSON 结构或模式过于复杂。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
+           throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
       }
 
 
@@ -205,10 +206,10 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
             console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
              throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
-        // Check for schema validation error from API (like exclusiveMinimum or length)
-        if (errorMessage.includes('Invalid JSON payload') && errorMessage.includes('generation_config.response_schema')) {
-            console.error("AI 返回了无效的 JSON 结构，与 Zod 模式不匹配。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
-            throw new Error(`AI 提示执行失败：AI 返回的数据格式无效。${errorMessage}`);
+        // Check for schema validation error from API (like exclusiveMinimum or length, or "too many states")
+        if (errorMessage.includes('Invalid JSON payload') && (errorMessage.includes('generation_config.response_schema') || errorMessage.includes('too many states'))) {
+            console.error("AI 返回了无效的 JSON 结构或 Zod 模式过于复杂。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
+            throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
         }
 
        // Throw generic AI error for other issues (in Chinese)
@@ -216,33 +217,38 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
     }
 
 
-     // Validate AI output against Zod schema again for robustness, focusing on the length requirement.
+     // Validate AI output against Zod schema again for robustness.
+     // Even though we relaxed the schema for the API call, we still expect 21 recipes from the prompt logic.
+     // We can use a stricter schema here for internal validation if desired, or just check length directly.
      try {
-       // Ensure GenerateWeeklyRecipesOutputSchema checks for length 21
-       const validatedOutput = GenerateWeeklyRecipesOutputSchema.parse(output);
+       // Temporary schema for validation, ensuring 21 recipes.
+       const StrictGenerateWeeklyRecipesOutputSchema = GenerateWeeklyRecipesOutputSchema.extend({
+          suggestedRecipes: z.array(GeneratedRecipeSchema).length(21, "AI 未能生成完整的每周21餐计划。"),
+       });
+
+       const validatedOutput = StrictGenerateWeeklyRecipesOutputSchema.parse(output);
        console.log("Validated AI output (21 recipes expected):", validatedOutput);
 
        // Map dayOfWeek and mealType back to Chinese for the final Recipe object if needed elsewhere,
        // but the core logic now relies on English enums from the schema.
-       // This mapping step might not be strictly necessary if the UI handles the translation based on the English value.
        const translatedRecipes = validatedOutput.suggestedRecipes.map(recipe => ({
             ...recipe,
-            // Assuming Recipe type expects Chinese day/meal strings
             // dayOfWeek: daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek,
             // mealType: mealTypesChineseMap[recipe.mealType] || recipe.mealType,
        }));
 
 
-       // Return validated output directly (using English day/meal types as validated by Zod)
-       // return validatedOutput;
         return { ...validatedOutput, suggestedRecipes: translatedRecipes };
 
      } catch (validationError) {
          if (validationError instanceof z.ZodError) {
-             console.error("AI output failed Zod validation:", validationError.issues);
+             console.error("AI output failed Zod validation (expected 21 recipes):", validationError.issues);
              // Check specifically for length error
-             const lengthIssue = validationError.issues.find(issue => issue.code === z.ZodIssueCode.too_small || issue.code === z.ZodIssueCode.too_big);
-              if (lengthIssue && lengthIssue.path.includes('suggestedRecipes')) {
+             const lengthIssue = validationError.issues.find(issue =>
+                 (issue.code === z.ZodIssueCode.too_small || issue.code === z.ZodIssueCode.too_big) &&
+                 issue.path.includes('suggestedRecipes')
+             );
+              if (lengthIssue) {
                  throw new Error(`AI未能生成完整的每周21餐计划。模式验证失败: ${lengthIssue.message}`);
              }
               throw new Error(`AI 输出未通过 Zod 验证: ${validationError.message}`);
@@ -250,13 +256,6 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
               console.error("Unknown validation error:", validationError);
               throw new Error("验证 AI 输出时发生未知错误。");
          }
-          console.warn("AI output that failed validation:", output); // Log the invalid structure
-
-         // Attempt to salvage - NOT IDEAL if length is the issue, better to throw.
-          // Consider if you want fallback behavior or always require 21 recipes.
-          // Returning partial data here might be confusing. For now, let the error propagate.
-          // throw new Error("AI 生成的食谱数量不正确或格式无效。");
-
      }
   }
 );
@@ -298,8 +297,3 @@ function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchem
          carbohydrates: undefined,
      };
 }
-
-
-    
-
-
