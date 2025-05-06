@@ -95,6 +95,14 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
     };
 };
 
+// Mapping for translating English day/meal from AI to Chinese for UI
+const daysOfWeekChineseMapReverse: { [key: string]: string } = {
+  Monday: "周一", Tuesday: "周二", Wednesday: "周三", Thursday: "周四", Friday: "周五", Saturday: "周六", Sunday: "周日"
+};
+const mealTypesChineseMapReverse: { [key: string]: string } = {
+  Breakfast: "早餐", Lunch: "午餐", Dinner: "晚餐"
+};
+
 
 export default function Home() {
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
@@ -433,6 +441,7 @@ export default function Home() {
         const previousWeekRecipes = weeklyRecipes[previousWeekStartDate] || [];
         previousWeekRecipesString = previousWeekRecipes.length > 0
             ? previousWeekRecipes.map(recipe =>
+                 // Use the Chinese display name format for the prompt
                  `日期: ${recipe.dayOfWeek}, 餐别: ${recipe.mealType}, 食谱: ${recipe.name}\n${recipe.ingredients && recipe.ingredients.length > 0 ? `成分:\n${recipe.ingredients.filter(i=>i.name && i.quantity>0).map(ing => `- ${ing.name} (${ing.quantity}克)`).join('\n')}` : '(未列出成分)'}`
                ).join('\n\n')
             : undefined; // Pass undefined if no recipes last week
@@ -448,6 +457,7 @@ export default function Home() {
         const existingRecipes = weeklyRecipes[currentWeekStartDate] || [];
         existingCurrentWeekRecipesString = existingRecipes.length > 0
             ? existingRecipes.map(recipe =>
+                // Use the Chinese display name format for the prompt
                 `日期: ${recipe.dayOfWeek}, 餐别: ${recipe.mealType}, 食谱: ${recipe.name}`
               ).join('\n')
             : undefined;
@@ -480,9 +490,13 @@ export default function Home() {
          const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe, index) => {
            const recipeId = `recipe-gen-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 
-            // Basic validation for day/meal from AI
-           const validDay = daysOfWeek.includes(genRecipe.dayOfWeek) ? genRecipe.dayOfWeek : daysOfWeek[0]; // Default to Monday
-           const validMeal = mealTypes.includes(genRecipe.mealType) ? genRecipe.mealType : mealTypes[0]; // Default to Breakfast
+            // Translate English day/meal from AI to Chinese for storage and display
+           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0]; // Default to 周一 if map fails
+           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0]; // Default to 早餐 if map fails
+
+           // Validate against allowed Chinese values
+           const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[0];
+           const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[0];
 
            let recipe: Recipe = {
              id: recipeId,
@@ -497,6 +511,7 @@ export default function Home() {
                                 quantity: Number(ing.quantity) || 0, // Ensure quantity is number
                             })),
              weekStartDate: currentWeekStartDate,
+             // Store the validated CHINESE names
              dayOfWeek: validDay,
              mealType: validMeal,
              calories: undefined, // Initialize nutrition fields
@@ -767,4 +782,6 @@ export default function Home() {
     </main>
   );
 }
+
+
 

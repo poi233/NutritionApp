@@ -123,7 +123,8 @@ const prompt = ai.definePrompt({
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   // Updated prompt to request Chinese output, use internal English day/meal names, and exclude snacks.
-  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。将每个建议分配到特定的星期（${daysOfWeekInternal.join('/')}）和餐别（${mealTypesInternal.join('/')}）。**不要生成点心 (Snack) 的建议。** 输出语言必须为简体中文。
+  // Added more explicit instructions about distribution and filling gaps.
+  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。**目标是将这些建议均匀地分配到本周不同的日期和餐别时段（${mealTypesInternal.join('/')}），优先填补空白时段。** 输出语言必须为简体中文。
 
 请考虑以下用户信息：
 - 饮食需求：{{{dietaryNeeds}}}
@@ -133,15 +134,15 @@ const prompt = ai.definePrompt({
 {{{previousWeekRecipes}}}
 {{/if}}
 {{#if existingCurrentWeekRecipes}}
-- 本周已计划的餐点（避免为这些时段提出建议，并补充它们）：
+- 本周已计划的餐点（请避免重复这些时段，并尝试用新建议补充空白时段）：
 {{{existingCurrentWeekRecipes}}}
 {{/if}}
 
 **说明：**
 1.  **分析：** 查看上周的餐点（如果提供）和本周已计划的餐点（如果提供）。
-2.  **识别空缺：** 确定本周哪些日期/餐别时段是空的。
-3.  **生成建议：** 创建 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。优先填补已识别的空缺。确保多样性。**只生成早餐、午餐、晚餐的建议。**
-4.  **分配日期/餐别：** 对于每个建议，分配一个有效的 'dayOfWeek'（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）和一个有效的 'mealType'（必须是 ${mealTypesInternal.join(', ')} 中的一个）。请具体说明。
+2.  **识别空缺：** 确定本周哪些日期/餐别时段（早餐、午餐、晚餐）是空的，没有任何计划。
+3.  **生成建议：** 创建大约 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。**确保这些建议具有多样性，并且分配到本周不同的日期和餐别时段。优先为已识别的空缺时段生成建议。**
+4.  **分配日期/餐别：** 对于每个建议，**分配一个具体且有效的 'dayOfWeek'**（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）**和一个具体且有效的 'mealType'**（必须是 ${mealTypesInternal.join(', ')} 中的一个）。**确保分配覆盖不同的日期和餐别，不要都分配到同一个时段。**
 5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数且大于0（例如，0.1克或更多）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
 6.  **平衡：** 如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱（例如，如果上周肉类较多，建议更多素食选项）。
 7.  **格式化输出：** 严格按照 'GenerateWeeklyRecipesOutputSchema' 格式提供输出。每个建议的食谱必须包含 'name'（中文）、'description'（中文）、'dayOfWeek'（英文）、'mealType'（英文）和一个 'ingredients' 数组，其中每个成分都有 'name'（中文）和正数 'quantity'。如果适用，请包含整体的 'notes'（中文）。
@@ -187,6 +188,12 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
             console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
              throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
+        // Check for schema validation error from API (like exclusiveMinimum)
+        if (errorMessage.includes('Invalid JSON payload') && errorMessage.includes('generation_config.response_schema')) {
+            console.error("AI 返回了无效的 JSON 结构，与 Zod 模式不匹配。请检查 Zod 模式定义和 AI 提示中的输出要求。错误详情:", errorMessage);
+            throw new Error(`AI 提示执行失败：AI 返回的数据格式无效。${errorMessage}`);
+        }
+
        // Throw generic AI error for other issues (in Chinese)
         throw new Error(`AI 提示执行失败: ${errorMessage}`);
     }
@@ -285,3 +292,4 @@ function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchem
 
 
     
+
