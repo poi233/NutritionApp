@@ -20,7 +20,7 @@ interface WeeklyPlannerProps {
   recipes: Recipe[];
   onDeleteRecipe: (recipeId: string) => void;
   daysOfWeek: string[];
-  mealTypes: string[];
+  mealTypes: string[]; // Already filtered in parent component
   // Translation props
   deleteLabel: string;
   detailsLabel: string;
@@ -39,7 +39,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     recipes,
     onDeleteRecipe,
     daysOfWeek,
-    mealTypes,
+    mealTypes, // Receive filtered meal types
     deleteLabel,
     detailsLabel,
     emptyLabel,

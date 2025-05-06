@@ -49,7 +49,7 @@ interface RecipeInputFormProps {
   onAddRecipe: (recipe: RecipeFormData) => void; // Pass only the necessary data
   currentWeekStartDate: string; // Receive the current week
   daysOfWeek: string[]; // Receive translated days
-  mealTypes: string[]; // Receive translated meal types
+  mealTypes: string[]; // Receive translated meal types (already filtered in parent)
   // Translation props
   addMealTitle: string;
   recipeNameLabel: string;
@@ -71,7 +71,7 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     onAddRecipe,
     currentWeekStartDate,
     daysOfWeek,
-    mealTypes,
+    mealTypes, // Receive the filtered meal types
     addMealTitle,
     recipeNameLabel,
     recipeNamePlaceholder,

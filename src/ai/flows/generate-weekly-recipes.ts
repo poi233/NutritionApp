@@ -9,24 +9,31 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-
+import type { Recipe } from '@/types/recipe'; // Import Recipe type
 
 // Keep English internally for consistency, will translate in UI or prompt
 const daysOfWeekInternal = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const mealTypesInternal = ["Breakfast", "Lunch", "Dinner", "Snack"];
+// Removed Snack
+const mealTypesInternal = ["Breakfast", "Lunch", "Dinner"];
 
 // Use Zod enums based on the internal English values for validation
+const GeneratedIngredientSchema = z.object({
+  name: z.string().describe('The name of the estimated ingredient, in Chinese.'), // Specify Chinese name
+  // Updated validation: must be a number greater than 0
+  quantity: z.coerce // Coerce input to number
+    .number({ invalid_type_error: "数量必须是数字" }) // "Quantity must be a number"
+    .positive("数量必须是正数（大于0）"), // "Quantity must be positive (greater than 0)"
+});
+
 const GeneratedRecipeSchema = z.object({
     name: z.string().describe('The name of the generated recipe suggestion, in Chinese.'), // Specify Chinese name
     description: z.string().describe('A brief description of the recipe, in Chinese.'), // Specify Chinese description
     // Validate against internal English values
     dayOfWeek: z.enum(daysOfWeekInternal as [string, ...string[]]).describe('The suggested day of the week for this meal (must be one of Monday, Tuesday, etc.).'),
-    mealType: z.enum(mealTypesInternal as [string, ...string[]]).describe('The suggested meal type for this meal (must be one of Breakfast, Lunch, etc.).'),
-    // Generate estimated ingredients
-    ingredients: z.array(z.object({
-        name: z.string().describe('The name of the estimated ingredient, in Chinese.'), // Specify Chinese name
-        quantity: z.number().min(0.1, "Quantity must be at least 0.1").describe('The estimated quantity of the ingredient in grams (must be greater than 0).'),
-    })).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
+    // Updated meal type enum without Snack
+    mealType: z.enum(mealTypesInternal as [string, ...string[]]).describe('The suggested meal type for this meal (must be one of Breakfast, Lunch, Dinner).'),
+    // Generate estimated ingredients using the updated schema
+    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
 });
 
 
@@ -103,8 +110,9 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 const daysOfWeekChineseMap: { [key: string]: string } = {
     Monday: "周一", Tuesday: "周二", Wednesday: "周三", Thursday: "周四", Friday: "周五", Saturday: "周六", Sunday: "周日"
 };
+// Updated map without Snack
 const mealTypesChineseMap: { [key: string]: string } = {
-    Breakfast: "早餐", Lunch: "午餐", Dinner: "晚餐", Snack: "点心"
+    Breakfast: "早餐", Lunch: "午餐", Dinner: "晚餐"
 };
 
 
@@ -114,8 +122,8 @@ const prompt = ai.definePrompt({
   model: 'googleai/gemini-1.5-flash', // Ensure this model is correct and available
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
-  // Updated prompt to request Chinese output and use internal English day/meal names for assignment.
-  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。将每个建议分配到特定的星期（${daysOfWeekInternal.join('/')}）和餐别（${mealTypesInternal.join('/')}）。输出语言必须为简体中文。
+  // Updated prompt to request Chinese output, use internal English day/meal names, and exclude snacks.
+  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。将每个建议分配到特定的星期（${daysOfWeekInternal.join('/')}）和餐别（${mealTypesInternal.join('/')}）。**不要生成点心 (Snack) 的建议。** 输出语言必须为简体中文。
 
 请考虑以下用户信息：
 - 饮食需求：{{{dietaryNeeds}}}
@@ -132,7 +140,7 @@ const prompt = ai.definePrompt({
 **说明：**
 1.  **分析：** 查看上周的餐点（如果提供）和本周已计划的餐点（如果提供）。
 2.  **识别空缺：** 确定本周哪些日期/餐别时段是空的。
-3.  **生成建议：** 创建 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。优先填补已识别的空缺。确保多样性。
+3.  **生成建议：** 创建 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。优先填补已识别的空缺。确保多样性。**只生成早餐、午餐、晚餐的建议。**
 4.  **分配日期/餐别：** 对于每个建议，分配一个有效的 'dayOfWeek'（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）和一个有效的 'mealType'（必须是 ${mealTypesInternal.join(', ')} 中的一个）。请具体说明。
 5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数（例如，大于0）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
 6.  **平衡：** 如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱（例如，如果上周肉类较多，建议更多素食选项）。

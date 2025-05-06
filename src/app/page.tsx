@@ -40,7 +40,8 @@ interface UserPreferences {
 
 // Translated days and meal types
 const daysOfWeek = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-const mealTypes = ["早餐", "午餐", "晚餐", "点心"];
+// Removed "点心" (Snack)
+const mealTypes = ["早餐", "午餐", "晚餐"];
 
 // Helper to get the start of the week (assuming Monday start)
 const getWeekStartDate = (date: Date): string => {
@@ -481,7 +482,7 @@ export default function Home() {
 
             // Basic validation for day/meal from AI
            const validDay = daysOfWeek.includes(genRecipe.dayOfWeek) ? genRecipe.dayOfWeek : daysOfWeek[0]; // Default to Monday
-           const validMeal = mealTypes.includes(genRecipe.mealType) ? genRecipe.mealType : mealTypes[1]; // Default to Lunch
+           const validMeal = mealTypes.includes(genRecipe.mealType) ? genRecipe.mealType : mealTypes[0]; // Default to Breakfast
 
            let recipe: Recipe = {
              id: recipeId,
