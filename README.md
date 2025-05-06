@@ -45,7 +45,7 @@ This is a Next.js application built with Firebase IDX that helps you plan your w
         ```env
         GOOGLE_API_KEY=PASTE_YOUR_ACTUAL_API_KEY_HERE
         ```
-    *   **Important:** Keep your API key secret. Do not commit the `.env` file to version control.
+    *   **Important:** Keep your API key secret. Do not commit the `.env` file to version control. Make sure there are no extra spaces or characters around the key.
 
 ### Running the Development Servers
 
@@ -64,6 +64,10 @@ You need to run **two** development servers concurrently in separate terminals:
     This starts the Genkit development UI, typically on `http://localhost:4000`, allowing you to inspect and test your AI flows separately.
 
     *Note:* The Next.js app calls the AI flows directly as Server Actions. The `genkit:dev` server is primarily for debugging and observing the flows during development. The main application will function even without it running, but you won't have the Genkit inspection UI.
+
+**Troubleshooting Authentication:** If you encounter errors related to API keys or authentication when using AI features:
+*   **Double-check your `.env` file:** Ensure the `GOOGLE_API_KEY` is present, correct, and has no extra spaces or characters.
+*   **Restart both servers:** After modifying `.env`, stop both the Next.js (`npm run dev`) and Genkit (`npm run genkit:dev`) servers and restart them completely. Changes to `.env` are often not picked up automatically.
 
 ### Accessing the App
 

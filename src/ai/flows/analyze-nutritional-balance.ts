@@ -50,6 +50,16 @@ const AnalyzeNutritionalBalanceOutputSchema = z.object({
 
 export type AnalyzeNutritionalBalanceOutput = z.infer<typeof AnalyzeNutritionalBalanceOutputSchema>;
 
+// Helper function to check for common API key error messages
+const isApiKeyError = (errorMessage: string): boolean => {
+    const lowerCaseMessage = errorMessage.toLowerCase();
+    return lowerCaseMessage.includes('api key not valid') ||
+           lowerCaseMessage.includes('api_key_invalid') ||
+           lowerCaseMessage.includes('invalid api key') ||
+           lowerCaseMessage.includes('permission denied') || // Sometimes permission errors mask key issues
+           lowerCaseMessage.includes('authentication failed');
+};
+
 export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalanceInput): Promise<AnalyzeNutritionalBalanceOutput> {
   // The flow execution might throw errors (e.g., API key issues, network problems)
   // We catch them here to prevent unhandled promise rejections.
@@ -60,16 +70,23 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
       return result;
   } catch (error) {
       console.error("Error executing analyzeNutritionalBalance function:", error);
-      // Re-throw the error so the client-side catch block can handle it
-      // Or return a specific error structure if needed
-      throw new Error(`Failed to analyze nutritional balance: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Provide a more specific error message for API key issues
+      if (isApiKeyError(errorMessage)) {
+          console.error("Potential API Key issue detected.");
+          throw new Error(`Failed to analyze nutritional balance: Invalid Google AI API Key or Authentication Error. Please check the GOOGLE_API_KEY environment variable and ensure it's correct and active. Original error: ${errorMessage}`);
+      }
+
+      // Re-throw other errors
+      throw new Error(`Failed to analyze nutritional balance: ${errorMessage}`);
   }
 }
 
 // Note: The prompt now receives recipe names with context
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
+  model: 'gemini-1.5-flash-latest', // Correct, available model name
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -169,17 +186,21 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
              console.log("analyzeNutritionalBalancePrompt parsed output:", output);
         } catch (aiError) {
             console.error("Error calling analyzeNutritionalBalancePrompt:", aiError);
+            const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);
+
              // Check if it's an API key issue more specifically
-            if (aiError instanceof Error && (aiError.message.includes('API key not valid') || aiError.message.includes('API_KEY_INVALID'))) {
+            if (isApiKeyError(errorMessage)) {
                  console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
-                 throw new Error(`AI prompt execution failed: Invalid Google AI API Key. ${aiError.message}`);
+                 // Throw a more specific error that the outer catch block can identify
+                 throw new Error(`AI prompt execution failed: Invalid Google AI API Key or Authentication Error. ${errorMessage}`);
             }
             // Check for model not found error specifically
-            if (aiError instanceof Error && aiError.message.includes('Model') && aiError.message.includes('not found')) {
+            if (errorMessage.includes('Model') && errorMessage.includes('not found')) {
                console.error(`The specified model in analyzeNutritionalBalancePrompt ('${analyzeNutritionalBalancePrompt.model?.name}') was not found or is invalid.`);
-               throw new Error(`AI prompt execution failed: ${aiError.message}`);
+               throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
             }
-            throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
+            // Throw generic AI error for other issues
+            throw new Error(`AI prompt execution failed: ${errorMessage}`);
         }
 
         // 4. Return the result. Ensure the structure matches the schema.

@@ -3,6 +3,8 @@ import {googleAI} from '@genkit-ai/googleai';
 import { defineDotprompt } from "@genkit-ai/dotprompt";
 import path from "path";
 
+let googleApiKey: string | undefined = undefined;
+
 // Check if GOOGLE_API_KEY is set
 if (!process.env.GOOGLE_API_KEY) {
   console.error(
@@ -19,16 +21,17 @@ if (!process.env.GOOGLE_API_KEY) {
    // in a broken state if the key is absolutely essential.
    // throw new Error("Missing GOOGLE_API_KEY environment variable. AI features disabled.");
 } else {
-     // Optional: Log success or partial key for verification (DO NOT log the full key)
-     console.log("[Genkit Init] GOOGLE_API_KEY found (ending with '..." + process.env.GOOGLE_API_KEY.slice(-4) + "').");
+     // Store the key for explicit passing and log success
+     googleApiKey = process.env.GOOGLE_API_KEY;
+     console.log("[Genkit Init] GOOGLE_API_KEY found and will be used (ending with '..." + googleApiKey.slice(-4) + "').");
 }
 
 export const ai = genkit({
   plugins: [
     googleAI({
-        // The API key is implicitly read from the GOOGLE_API_KEY environment variable
-        // You can explicitly pass apiKey: process.env.GOOGLE_API_KEY if needed,
-        // but it's typically handled automatically by the googleAI plugin.
+        // Explicitly pass the API key if it was found.
+        // The plugin typically reads this implicitly, but being explicit can help debugging.
+        apiKey: googleApiKey,
     }),
      // defineDotprompt({ dir: path.join(__dirname, "../prompts") }), // Example if using .prompt files
   ],
@@ -36,3 +39,10 @@ export const ai = genkit({
   logLevel: 'debug', // Enable detailed logging for development
   enableTracing: true, // Enable tracing for debugging flows
 });
+
+// Add an extra check after initialization to see if the key was truly picked up (optional)
+if (googleApiKey) {
+    console.log("[Genkit Init] Google AI Plugin configured with API key.");
+} else {
+    console.warn("[Genkit Init] Google AI Plugin configured WITHOUT an API key. AI features will likely fail.");
+}

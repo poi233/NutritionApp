@@ -39,6 +39,16 @@ const GenerateWeeklyRecipesOutputSchema = z.object({
 });
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
 
+// Helper function to check for common API key error messages
+const isApiKeyError = (errorMessage: string): boolean => {
+    const lowerCaseMessage = errorMessage.toLowerCase();
+    return lowerCaseMessage.includes('api key not valid') ||
+           lowerCaseMessage.includes('api_key_invalid') ||
+           lowerCaseMessage.includes('invalid api key') ||
+           lowerCaseMessage.includes('permission denied') || // Sometimes permission errors mask key issues
+           lowerCaseMessage.includes('authentication failed');
+};
+
 export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): Promise<GenerateWeeklyRecipesOutput> {
    // The flow execution might throw errors (e.g., API key issues, network problems)
    // We catch them here to prevent unhandled promise rejections.
@@ -49,14 +59,22 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
       return result;
    } catch (error) {
      console.error("Error executing generateWeeklyRecipes function:", error);
-     // Re-throw the error so the client-side catch block can handle it
-     throw new Error(`Failed to generate weekly recipes: ${error instanceof Error ? error.message : String(error)}`);
+     const errorMessage = error instanceof Error ? error.message : String(error);
+
+     // Provide a more specific error message for API key issues
+     if (isApiKeyError(errorMessage)) {
+         console.error("Potential API Key issue detected.");
+         throw new Error(`Failed to generate weekly recipes: Invalid Google AI API Key or Authentication Error. Please check the GOOGLE_API_KEY environment variable and ensure it's correct and active. Original error: ${errorMessage}`);
+     }
+
+     // Re-throw other errors
+     throw new Error(`Failed to generate weekly recipes: ${errorMessage}`);
    }
 }
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
+  model: 'gemini-1.5-flash-latest', // Correct, available model name
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -107,17 +125,21 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         console.log("generateWeeklyRecipesPrompt parsed output:", output);
     } catch (aiError) {
        console.error("Error calling generateWeeklyRecipesPrompt:", aiError);
+       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);
+
         // Check if it's an API key issue more specifically
-        if (aiError instanceof Error && (aiError.message.includes('API key not valid') || aiError.message.includes('API_KEY_INVALID'))) {
+        if (isApiKeyError(errorMessage)) {
              console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
-             throw new Error(`AI prompt execution failed: Invalid Google AI API Key. ${aiError.message}`);
+              // Throw a more specific error that the outer catch block can identify
+             throw new Error(`AI prompt execution failed: Invalid Google AI API Key or Authentication Error. ${errorMessage}`);
         }
         // Check for model not found error specifically
-        if (aiError instanceof Error && aiError.message.includes('Model') && aiError.message.includes('not found')) {
+        if (errorMessage.includes('Model') && errorMessage.includes('not found')) {
             console.error(`The specified model in generateWeeklyRecipesPrompt ('${prompt.model?.name}') was not found or is invalid.`);
-            throw new Error(`AI prompt execution failed: ${aiError.message}`);
+            throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
         }
-       throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
+       // Throw generic AI error for other issues
+       throw new Error(`AI prompt execution failed: ${errorMessage}`);
     }
 
 
@@ -149,4 +171,5 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
      }
   }
 );
+
 

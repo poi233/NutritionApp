@@ -30,31 +30,40 @@ const RecommendNewRecipesOutputSchema = z.object({
 });
 export type RecommendNewRecipesOutput = z.infer<typeof RecommendNewRecipesOutputSchema>;
 
+// Helper function to check for common API key error messages
+const isApiKeyError = (errorMessage: string): boolean => {
+    const lowerCaseMessage = errorMessage.toLowerCase();
+    return lowerCaseMessage.includes('api key not valid') ||
+           lowerCaseMessage.includes('api_key_invalid') ||
+           lowerCaseMessage.includes('invalid api key') ||
+           lowerCaseMessage.includes('permission denied') || // Sometimes permission errors mask key issues
+           lowerCaseMessage.includes('authentication failed');
+};
+
 export async function recommendNewRecipes(input: RecommendNewRecipesInput): Promise<RecommendNewRecipesOutput> {
   try {
     return await recommendNewRecipesFlow(input);
   } catch (error) {
       console.error("Error executing recommendNewRecipes function:", error);
-       // Check for specific API key error (example, adjust based on actual error message)
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during recommendation.";
-        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
-        const isModelError = errorMessage.includes('Model') && errorMessage.includes('not found');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isModelError = errorMessage.includes('Model') && errorMessage.includes('not found');
 
-        let userFriendlyMessage = `Failed to recommend recipes: ${errorMessage}`;
-        if (isApiKeyError) {
-            userFriendlyMessage = `Failed to recommend recipes: Invalid Google AI API Key. Please check your configuration.`;
-        } else if (isModelError) {
-             userFriendlyMessage = `Failed to recommend recipes: The configured AI model was not found.`;
-        }
+      let userFriendlyMessage = `Failed to recommend recipes: ${errorMessage}`;
 
-        // Re-throw with a potentially more user-friendly message or the original error
-        throw new Error(userFriendlyMessage);
+      if (isApiKeyError(errorMessage)) {
+          userFriendlyMessage = `Failed to recommend recipes: Invalid Google AI API Key or Authentication Error. Please check your configuration. Original error: ${errorMessage}`;
+      } else if (isModelError) {
+           userFriendlyMessage = `Failed to recommend recipes: The configured AI model was not found.`;
+      }
+
+      // Re-throw with a potentially more user-friendly message or the original error
+      throw new Error(userFriendlyMessage);
   }
 }
 
 const prompt = ai.definePrompt({
   name: 'recommendNewRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
+  model: 'gemini-1.5-flash-latest', // Correct, available model name
   input: {schema: RecommendNewRecipesInputSchema},
   output: {schema: RecommendNewRecipesOutputSchema},
   prompt: `You are a recipe recommendation expert. You will recommend new recipes based on the dietary needs and preferences of the user.
