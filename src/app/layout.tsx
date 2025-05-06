@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'NutriJournal',
-  description: 'Track your weekly recipes and analyze nutritional balance.',
+  title: '营养日志 (NutriJournal)', // Translated Title
+  description: '追踪您每周的食谱并分析营养平衡。 (Track your weekly recipes and analyze nutritional balance.)', // Translated Description
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="zh"> {/* Changed lang to Chinese */}
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
         <Toaster />

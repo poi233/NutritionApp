@@ -9,44 +9,46 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { google } from "@ai-sdk/google"; // Keep unused import for potential future use? Or remove?
-
-const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const mealTypes = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
 
+// Keep English internally for consistency, will translate in UI or prompt
+const daysOfWeekInternal = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const mealTypesInternal = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+// Use Zod enums based on the internal English values for validation
+const GeneratedRecipeSchema = z.object({
+    name: z.string().describe('The name of the generated recipe suggestion, in Chinese.'), // Specify Chinese name
+    description: z.string().describe('A brief description of the recipe, in Chinese.'), // Specify Chinese description
+    // Validate against internal English values
+    dayOfWeek: z.enum(daysOfWeekInternal as [string, ...string[]]).describe('The suggested day of the week for this meal (must be one of Monday, Tuesday, etc.).'),
+    mealType: z.enum(mealTypesInternal as [string, ...string[]]).describe('The suggested meal type for this meal (must be one of Breakfast, Lunch, etc.).'),
+    // Generate estimated ingredients
+    ingredients: z.array(z.object({
+        name: z.string().describe('The name of the estimated ingredient, in Chinese.'), // Specify Chinese name
+        quantity: z.number().min(0.1, "Quantity must be at least 0.1").describe('The estimated quantity of the ingredient in grams (must be greater than 0).'),
+    })).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
+});
+
+
+// Input schema remains the same, preferences might now include Chinese
 const GenerateWeeklyRecipesInputSchema = z.object({
   weekStartDate: z.string().describe('The start date of the week for which to generate recipes (ISO format: yyyy-MM-dd).'),
   dietaryNeeds: z.string().optional().describe('The dietary needs of the user (e.g., vegetarian, gluten-free).'),
-  preferences: z.string().optional().describe('The food preferences of the user (e.g., Italian, spicy).'),
+  preferences: z.string().optional().describe('The food preferences of the user (e.g., Chinese food, Italian, spicy).'), // Added Chinese food example
   previousWeekRecipes: z.string().optional().describe('A summary of recipes from the previous week, used for context and nutritional balancing (format: "Day: [Day Name], Meal: [Meal Type], Recipe: [Recipe Name]").'),
   existingCurrentWeekRecipes: z.string().optional().describe('A summary of recipes already planned for the current week, to avoid duplicates and fill gaps (same format as previousWeekRecipes).'),
   numberOfSuggestions: z.number().optional().default(7).describe('Approximate number of meal suggestions to generate (default: 7). Aim for variety across days/meals.')
 });
 export type GenerateWeeklyRecipesInput = z.infer<typeof GenerateWeeklyRecipesInputSchema>;
 
-// Modify the quantity schema to use min(0.1) instead of positive()
-const GeneratedIngredientSchema = z.object({
-    name: z.string().describe('The name of the estimated ingredient.'),
-    // Use min(0.1) to guide the model towards positive numbers without using the problematic .positive() constraint
-    quantity: z.number().min(0.1, "Quantity must be at least 0.1").describe('The estimated quantity of the ingredient in grams (must be greater than 0).'),
-});
 
-const GeneratedRecipeSchema = z.object({
-    name: z.string().describe('The name of the generated recipe suggestion.'),
-    description: z.string().describe('A brief description of the recipe.'),
-    // Add validation for day and meal types using zod enum
-    dayOfWeek: z.enum(daysOfWeek as [string, ...string[]]).describe('The suggested day of the week for this meal.'),
-    mealType: z.enum(mealTypes as [string, ...string[]]).describe('The suggested meal type for this meal.'),
-    // Generate estimated ingredients
-    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
-});
-
+// Output Schema: Use the updated GeneratedRecipeSchema which expects Chinese names/descriptions
 const GenerateWeeklyRecipesOutputSchema = z.object({
-  suggestedRecipes: z.array(GeneratedRecipeSchema).describe('A list of suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week.'),
-  notes: z.string().optional().describe('Any additional notes or comments on the suggestions, e.g., regarding nutritional balance or variety.'),
+  suggestedRecipes: z.array(GeneratedRecipeSchema).describe('A list of suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week. Recipe names and descriptions should be in Chinese.'),
+  notes: z.string().optional().describe('Any additional notes or comments on the suggestions (in Chinese), e.g., regarding nutritional balance or variety.'), // Specify Chinese notes
 });
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
+
 
 // Helper function to check for common API key error messages
 const isApiKeyError = (errorMessage: string): boolean => {
@@ -63,7 +65,16 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
    // We catch them here to prevent unhandled promise rejections.
    try {
       console.log("Entering generateWeeklyRecipes function with input:", input);
-      const result = await generateWeeklyRecipesFlow(input);
+      // Explicitly add/ensure Chinese preference if not already strongly specified
+       const preferencesWithChinese = input.preferences ?
+          (input.preferences.toLowerCase().includes('chinese') || input.preferences.includes('中餐') ? input.preferences : `${input.preferences}, prefers Chinese food (偏爱中餐)`)
+          : "prefers Chinese food (偏爱中餐)"; // Default if no preferences given
+
+
+      const modifiedInput = { ...input, preferences: preferencesWithChinese };
+      console.log("Modified input for prompt (emphasizing Chinese):", modifiedInput);
+
+      const result = await generateWeeklyRecipesFlow(modifiedInput);
       console.log("generateWeeklyRecipesFlow returned successfully:", result);
       return result;
    } catch (error) {
@@ -73,20 +84,29 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
      // Provide a more specific error message for API key issues
      if (isApiKeyError(errorMessage)) {
          console.error("Potential API Key issue detected.");
-         throw new Error(`Failed to generate weekly recipes: Invalid Google AI API Key or Authentication Error. Please check the GOOGLE_API_KEY environment variable and ensure it's correct and active. Original error: ${errorMessage}`);
+          throw new Error(`生成每周食谱失败：无效的 Google AI API 密钥或身份验证错误。请检查 GOOGLE_API_KEY 环境变量并确保其正确且有效。原始错误: ${errorMessage}`);
      }
 
      // Check for model not found specifically
      if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-          const modelName = prompt.model?.name || 'Unknown Model';
-          console.error(`The specified model in generateWeeklyRecipesPrompt ('${modelName}') was not found or is invalid.`);
-          throw new Error(`Failed to generate weekly recipes: AI model not found. ${errorMessage}`);
+          const modelName = prompt.model?.name || '未知模型';
+          console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
+          throw new Error(`生成每周食谱失败：AI 模型未找到。${errorMessage}`);
      }
 
-     // Re-throw other errors
-     throw new Error(`Failed to generate weekly recipes: ${errorMessage}`);
+     // Re-throw other errors (in Chinese)
+      throw new Error(`生成每周食谱失败: ${errorMessage}`);
    }
 }
+
+// Mapping for display in prompt (optional, but can help guide the model)
+const daysOfWeekChineseMap: { [key: string]: string } = {
+    Monday: "周一", Tuesday: "周二", Wednesday: "周三", Thursday: "周四", Friday: "周五", Saturday: "周六", Sunday: "周日"
+};
+const mealTypesChineseMap: { [key: string]: string } = {
+    Breakfast: "早餐", Lunch: "午餐", Dinner: "晚餐", Snack: "点心"
+};
+
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
@@ -94,28 +114,29 @@ const prompt = ai.definePrompt({
   model: 'googleai/gemini-1.5-flash', // Ensure this model is correct and available
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
-  prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
+  // Updated prompt to request Chinese output and use internal English day/meal names for assignment.
+  prompt: `你是一位专业的膳食规划师和营养师。为从 {{weekStartDate}} 开始的一周生成大约 {{numberOfSuggestions}} 种多样化的食谱建议。将每个建议分配到特定的星期（${daysOfWeekInternal.join('/')}）和餐别（${mealTypesInternal.join('/')}）。输出语言必须为简体中文。
 
-Consider the following user information:
-- Dietary Needs: {{{dietaryNeeds}}}
-- Food Preferences: {{{preferences}}}
+请考虑以下用户信息：
+- 饮食需求：{{{dietaryNeeds}}}
+- 食物偏好：{{{preferences}}} (请优先考虑中餐，因为用户偏爱中餐)
 {{#if previousWeekRecipes}}
-- Recipes from the PREVIOUS week (for context and nutritional balance):
+- 上周食谱（用于参考和营养平衡）：
 {{{previousWeekRecipes}}}
 {{/if}}
 {{#if existingCurrentWeekRecipes}}
-- Meals ALREADY PLANNED for the CURRENT week (avoid suggesting for these slots and complement them):
+- 本周已计划的餐点（避免为这些时段提出建议，并补充它们）：
 {{{existingCurrentWeekRecipes}}}
 {{/if}}
 
-**Instructions:**
-1.  **Analyze:** Look at the previous week's meals (if provided) and the meals already planned for the current week (if provided).
-2.  **Identify Gaps:** Determine which days/meal slots are empty in the current week.
-3.  **Generate Suggestions:** Create {{numberOfSuggestions}} meal suggestions that fit the user's dietary needs and preferences. Prioritize filling the identified gaps. Ensure variety.
-4.  **Assign Day/Meal:** For EACH suggestion, assign a valid 'dayOfWeek' (exactly one of: ${daysOfWeek.join(', ')}) and 'mealType' (exactly one of: ${mealTypes.join(', ')}). Be specific.
-5.  **Estimate Ingredients:** For EACH suggestion, provide a plausible list of main 'ingredients' with estimated 'quantity' in grams (e.g., [{ name: "Chicken Breast", quantity: 150 }, { name: "Broccoli", quantity: 100 }]). Aim for reasonable portion sizes and ensure quantity is a positive number (e.g., greater than 0). This is crucial for later nutritional estimation. The ingredients list must not be empty.
-6.  **Balance:** If previous week's meals are provided, try to suggest recipes that complement or balance the previous week's nutritional profile (e.g., if last week was heavy on meat, suggest more vegetarian options).
-7.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', 'mealType', and an 'ingredients' array where each ingredient has a 'name' and a positive 'quantity'. Include overall 'notes' if applicable.
+**说明：**
+1.  **分析：** 查看上周的餐点（如果提供）和本周已计划的餐点（如果提供）。
+2.  **识别空缺：** 确定本周哪些日期/餐别时段是空的。
+3.  **生成建议：** 创建 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。优先填补已识别的空缺。确保多样性。
+4.  **分配日期/餐别：** 对于每个建议，分配一个有效的 'dayOfWeek'（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）和一个有效的 'mealType'（必须是 ${mealTypesInternal.join(', ')} 中的一个）。请具体说明。
+5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数（例如，大于0）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
+6.  **平衡：** 如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱（例如，如果上周肉类较多，建议更多素食选项）。
+7.  **格式化输出：** 严格按照 'GenerateWeeklyRecipesOutputSchema' 格式提供输出。每个建议的食谱必须包含 'name'（中文）、'description'（中文）、'dayOfWeek'（英文）、'mealType'（英文）和一个 'ingredients' 数组，其中每个成分都有 'name'（中文）和正数 'quantity'。如果适用，请包含整体的 'notes'（中文）。
 `,
 });
 
@@ -138,7 +159,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
 
         if (!output) {
             console.error('generateWeeklyRecipesPrompt returned null or undefined output.');
-            throw new Error('AI prompt failed to generate a valid output structure.');
+             throw new Error('AI 提示未能生成有效的输出结构。');
         }
         console.log("generateWeeklyRecipesPrompt parsed output:", output);
     } catch (aiError) {
@@ -147,19 +168,19 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
 
         // Check if it's an API key issue more specifically
         if (isApiKeyError(errorMessage)) {
-             console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
+             console.error("看起来 Google AI API 密钥无效或丢失。请检查 GOOGLE_API_KEY 环境变量。");
               // Throw a more specific error that the outer catch block can identify
-             throw new Error(`AI prompt execution failed: Invalid Google AI API Key or Authentication Error. ${errorMessage}`);
+              throw new Error(`AI 提示执行失败：无效的 Google AI API 密钥或身份验证错误。${errorMessage}`);
         }
         // Check for model not found error specifically
         if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
             // Ensure the model name logged matches the one used
-            const modelName = prompt.model?.name || 'Unknown Model';
-            console.error(`The specified model in generateWeeklyRecipesPrompt ('${modelName}') was not found or is invalid.`);
-            throw new Error(`AI prompt execution failed: Model not found. ${errorMessage}`);
+            const modelName = prompt.model?.name || '未知模型';
+            console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
+             throw new Error(`AI 提示执行失败：模型未找到。${errorMessage}`);
         }
-       // Throw generic AI error for other issues
-       throw new Error(`AI prompt execution failed: ${errorMessage}`);
+       // Throw generic AI error for other issues (in Chinese)
+        throw new Error(`AI 提示执行失败: ${errorMessage}`);
     }
 
 
@@ -168,8 +189,22 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
        // Ensure GeneratedIngredientSchema is used within GeneratedRecipeSchema for validation
        const validatedOutput = GenerateWeeklyRecipesOutputSchema.parse(output);
        console.log("Validated AI output:", validatedOutput);
-       // Return validated output directly
-       return validatedOutput;
+
+       // Map dayOfWeek and mealType back to Chinese for the final Recipe object if needed elsewhere,
+       // but the core logic now relies on English enums from the schema.
+       // This mapping step might not be strictly necessary if the UI handles the translation based on the English value.
+       const translatedRecipes = validatedOutput.suggestedRecipes.map(recipe => ({
+            ...recipe,
+            // Assuming Recipe type expects Chinese day/meal strings
+            // dayOfWeek: daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek,
+            // mealType: mealTypesChineseMap[recipe.mealType] || recipe.mealType,
+       }));
+
+
+       // Return validated output directly (using English day/meal types as validated by Zod)
+       // return validatedOutput;
+        return { ...validatedOutput, suggestedRecipes: translatedRecipes };
+
      } catch (validationError) {
          console.error("AI output failed Zod validation:", validationError);
          console.warn("AI output that failed validation:", output); // Log the invalid structure
@@ -186,10 +221,56 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
             }
          });
 
+          // Map salvaged recipes' day/meal types if needed
+         const translatedSalvageableRecipes = salvageableRecipes.map(recipe => ({
+             ...recipe,
+             // dayOfWeek: daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek,
+             // mealType: mealTypesChineseMap[recipe.mealType] || recipe.mealType,
+         }));
+
           return {
-              suggestedRecipes: salvageableRecipes,
-              notes: output?.notes || "AI generated recipes, but some might be invalid or incomplete due to formatting issues (especially ingredients or quantities)."
+              // suggestedRecipes: salvageableRecipes,
+               suggestedRecipes: translatedSalvageableRecipes,
+               notes: output?.notes || "AI 生成了食谱，但由于格式问题（尤其是成分或数量），某些食谱可能无效或不完整。"
           };
      }
   }
 );
+
+// Helper function to map internal English day/meal to Chinese for UI consistency
+// (This assumes the Recipe type itself uses Chinese strings)
+function mapRecipeToChineseDisplay(recipe: z.infer<typeof GeneratedRecipeSchema>): z.infer<typeof GeneratedRecipeSchema> {
+     const mappedRecipe = { ...recipe };
+     // Uncomment the following lines if your `Recipe` type definition in `src/types/recipe.ts`
+     // actually requires Chinese strings for dayOfWeek and mealType.
+     // mappedRecipe.dayOfWeek = daysOfWeekChineseMap[recipe.dayOfWeek] || recipe.dayOfWeek;
+     // mappedRecipe.mealType = mealTypesChineseMap[recipe.mealType] || recipe.mealType;
+     return mappedRecipe;
+}
+
+// Helper to ensure the final Recipe object matches the expected type structure, including translation
+function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchema>, weekStartDate: string): Recipe {
+     const recipeId = `recipe-gen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+     // Use Chinese day/meal names based on the mapping
+     const displayDay = daysOfWeekChineseMap[genRecipe.dayOfWeek] || genRecipe.dayOfWeek;
+     const displayMeal = mealTypesChineseMap[genRecipe.mealType] || genRecipe.mealType;
+
+     return {
+         id: recipeId,
+         name: genRecipe.name,
+         description: genRecipe.description,
+         ingredients: genRecipe.ingredients.map((ing, ingIndex) => ({
+             id: `ingredient-gen-${recipeId}-${ingIndex}`,
+             name: ing.name,
+             quantity: ing.quantity,
+         })),
+         weekStartDate: weekStartDate,
+         // Store the translated display values in the final Recipe object
+         dayOfWeek: displayDay,
+         mealType: displayMeal,
+         calories: undefined,
+         protein: undefined,
+         fat: undefined,
+         carbohydrates: undefined,
+     };
+}

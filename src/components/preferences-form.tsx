@@ -20,9 +20,27 @@ type PreferencesFormData = z.infer<typeof preferencesSchema>;
 interface PreferencesFormProps {
   onSubmitPreferences: (data: PreferencesFormData) => void;
   defaultValues?: PreferencesFormData;
+  // Translation props
+  title: string;
+  description: string;
+  dietaryNeedsLabel: string;
+  dietaryNeedsPlaceholder: string;
+  preferencesLabel: string;
+  preferencesPlaceholder: string;
+  submitButtonLabel: string;
 }
 
-export const PreferencesForm: FC<PreferencesFormProps> = ({ onSubmitPreferences, defaultValues }) => {
+export const PreferencesForm: FC<PreferencesFormProps> = ({
+    onSubmitPreferences,
+    defaultValues,
+    title,
+    description,
+    dietaryNeedsLabel,
+    dietaryNeedsPlaceholder,
+    preferencesLabel,
+    preferencesPlaceholder,
+    submitButtonLabel
+ }) => {
   const {
     register,
     handleSubmit,
@@ -39,16 +57,16 @@ export const PreferencesForm: FC<PreferencesFormProps> = ({ onSubmitPreferences,
   return (
     <Card className="w-full max-w-lg mx-auto shadow-md mb-8">
       <CardHeader>
-        <CardTitle>Your Preferences</CardTitle>
-        <CardDescription>Help us recommend recipes you'll love.</CardDescription>
+         <CardTitle>{title}</CardTitle>
+         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="dietaryNeeds" className="block text-sm font-medium mb-1">Dietary Needs</Label>
+             <Label htmlFor="dietaryNeeds" className="block text-sm font-medium mb-1">{dietaryNeedsLabel}</Label>
             <Input
               id="dietaryNeeds"
-              placeholder="e.g., Vegetarian, Gluten-Free, Low Carb"
+              placeholder={dietaryNeedsPlaceholder}
               {...register("dietaryNeeds")}
               className="w-full"
             />
@@ -56,10 +74,10 @@ export const PreferencesForm: FC<PreferencesFormProps> = ({ onSubmitPreferences,
           </div>
 
           <div>
-            <Label htmlFor="preferences" className="block text-sm font-medium mb-1">Food Preferences</Label>
+             <Label htmlFor="preferences" className="block text-sm font-medium mb-1">{preferencesLabel}</Label>
             <Textarea
               id="preferences"
-              placeholder="e.g., Love spicy food, prefer Italian cuisine, dislike mushrooms"
+              placeholder={preferencesPlaceholder}
               {...register("preferences")}
               className="w-full min-h-[60px]"
             />
@@ -67,8 +85,8 @@ export const PreferencesForm: FC<PreferencesFormProps> = ({ onSubmitPreferences,
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">
-          <Button type="submit" disabled={!isDirty} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            Update Preferences
+           <Button type="submit" disabled={!isDirty} className="bg-accent text-accent-foreground hover:bg-accent/90">
+             {submitButtonLabel}
           </Button>
         </CardFooter>
       </form>

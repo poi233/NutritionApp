@@ -21,9 +21,36 @@ interface WeeklyPlannerProps {
   onDeleteRecipe: (recipeId: string) => void;
   daysOfWeek: string[];
   mealTypes: string[];
+  // Translation props
+  deleteLabel: string;
+  detailsLabel: string;
+  emptyLabel: string;
+  nutritionLabel: string;
+  ingredientsLabel: string;
+  descriptionLabel: string;
+  caloriesLabel: string;
+  proteinLabel: string;
+  fatLabel: string;
+  carbsLabel: string;
+
 }
 
-export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe, daysOfWeek, mealTypes }) => {
+export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
+    recipes,
+    onDeleteRecipe,
+    daysOfWeek,
+    mealTypes,
+    deleteLabel,
+    detailsLabel,
+    emptyLabel,
+    nutritionLabel,
+    ingredientsLabel,
+    descriptionLabel,
+    caloriesLabel,
+    proteinLabel,
+    fatLabel,
+    carbsLabel
+ }) => {
 
   // Get all recipes for a specific day and meal type
   const getRecipesForSlot = (day: string, meal: string): Recipe[] => {
@@ -35,7 +62,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
     <Table className="border shadow-md rounded-md overflow-hidden">
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">Meal</TableHead>
+           <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">餐别</TableHead> {/* Meal Type header */}
           {daysOfWeek.map(day => (
             <TableHead key={day} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
               {day}
@@ -69,26 +96,26 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
                                     <PopoverTrigger asChild>
                                       <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
                                         <Info className="h-3 w-3" />
-                                        <span className="sr-only">Details for {recipe.name}</span>
+                                         <span className="sr-only">{detailsLabel} {recipe.name}</span>
                                       </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-60 text-sm p-3 max-h-[300px] overflow-y-auto">
-                                      {recipe.description && <p className="mb-2"><strong>Description:</strong> {recipe.description}</p>}
+                                       {recipe.description && <p className="mb-2"><strong>{descriptionLabel}:</strong> {recipe.description}</p>}
                                       {recipe.calories !== undefined && (
                                         <div className="space-y-1">
-                                          <p><strong>Nutrition (Est.):</strong></p>
-                                          <p>Calories: {recipe.calories.toLocaleString()}</p>
-                                          <p>Protein: {recipe.protein?.toFixed(1)}g</p>
-                                          <p>Fat: {recipe.fat?.toFixed(1)}g</p>
-                                          <p>Carbs: {recipe.carbohydrates?.toFixed(1)}g</p>
+                                           <p><strong>{nutritionLabel} (估算):</strong></p>
+                                           <p>{caloriesLabel}: {recipe.calories.toLocaleString()}</p>
+                                           <p>{proteinLabel}: {recipe.protein?.toFixed(1)}克</p>
+                                           <p>{fatLabel}: {recipe.fat?.toFixed(1)}克</p>
+                                           <p>{carbsLabel}: {recipe.carbohydrates?.toFixed(1)}克</p>
                                         </div>
                                       )}
                                       {(recipe.ingredients && recipe.ingredients.length > 0) && (
                                           <div className="mt-2 pt-2 border-t">
-                                              <p><strong>Ingredients:</strong></p>
+                                               <p><strong>{ingredientsLabel}:</strong></p>
                                               <ul className="list-disc pl-4 text-xs"> {/* Smaller text for ingredients list */}
                                                   {recipe.ingredients.map(ing => (
-                                                      <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}g)</li>
+                                                      <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}克)</li>
                                                   ))}
                                               </ul>
                                           </div>
@@ -102,7 +129,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
                                   size="icon"
                                   onClick={() => onDeleteRecipe(recipe.id)}
                                   className="h-5 w-5 text-destructive hover:bg-destructive/10"
-                                  aria-label={`Delete ${recipe.name}`}
+                                   aria-label={`${deleteLabel} ${recipe.name}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -117,14 +144,14 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({ recipes, onDeleteRecipe,
                             {/* Display estimated calories in footer if available */}
                             {recipe.calories !== undefined && (
                                <CardFooter className="p-2 pt-0 mt-auto">
-                                 <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} cal (est.)</p>
+                                  <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} {caloriesLabel} (估算)</p>
                                </CardFooter>
                              )}
                           </Card>
                         ))
                      ) : (
                        <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[80px]"> {/* Ensure min height for empty slots */}
-                         Empty
+                          {emptyLabel}
                        </div>
                      )}
                    </div>

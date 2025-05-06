@@ -9,8 +9,8 @@ export interface Recipe {
   name: string;
   ingredients: Ingredient[];
   weekStartDate: string; // ISO string (yyyy-MM-dd) representing the start of the week
-  dayOfWeek: string; // e.g., "Monday", "Tuesday"
-  mealType: string; // e.g., "Breakfast", "Lunch", "Dinner"
+  dayOfWeek: string; // e.g., "Monday", "周一" (allow string for translation)
+  mealType: string; // e.g., "Breakfast", "早餐" (allow string for translation)
   // Optional nutritional info (can be calculated/estimated)
   calories?: number;
   protein?: number;
