@@ -19,10 +19,11 @@ const mealTypesInternal = ["Breakfast", "Lunch", "Dinner"];
 // Use Zod enums based on the internal English values for validation
 const GeneratedIngredientSchema = z.object({
   name: z.string().describe('The name of the estimated ingredient, in Chinese.'), // Specify Chinese name
-  // Updated validation: must be a number greater than 0
+  // Updated validation: must be a number greater than 0.
+  // Using .min(0.1) instead of .positive() to avoid 'exclusiveMinimum' in schema.
   quantity: z.coerce // Coerce input to number
     .number({ invalid_type_error: "数量必须是数字" }) // "Quantity must be a number"
-    .positive("数量必须是正数（大于0）"), // "Quantity must be positive (greater than 0)"
+    .min(0.1, "数量必须是大于零的正数"), // "Quantity must be a positive number greater than 0"
 });
 
 const GeneratedRecipeSchema = z.object({
@@ -33,7 +34,7 @@ const GeneratedRecipeSchema = z.object({
     // Updated meal type enum without Snack
     mealType: z.enum(mealTypesInternal as [string, ...string[]]).describe('The suggested meal type for this meal (must be one of Breakfast, Lunch, Dinner).'),
     // Generate estimated ingredients using the updated schema
-    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive.'),
+    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe. Quantity must be positive and greater than 0.'),
 });
 
 
@@ -96,9 +97,9 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
      // Check for model not found specifically
      if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-          const modelName = prompt.model?.name || '未知模型';
-          console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
-          throw new Error(`生成每周食谱失败：AI 模型未找到。${errorMessage}`);
+          const modelNameUsed = prompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+          console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
+          throw new Error(`生成每周食谱失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
      }
 
      // Re-throw other errors (in Chinese)
@@ -118,8 +119,7 @@ const mealTypesChineseMap: { [key: string]: string } = {
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  // Use the 'googleai/' prefix and a stable, available model name.
-  model: 'googleai/gemini-1.5-flash', // Ensure this model is correct and available
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   // Updated prompt to request Chinese output, use internal English day/meal names, and exclude snacks.
@@ -142,7 +142,7 @@ const prompt = ai.definePrompt({
 2.  **识别空缺：** 确定本周哪些日期/餐别时段是空的。
 3.  **生成建议：** 创建 {{numberOfSuggestions}} 个符合用户饮食需求和偏好（特别是中餐）的餐点建议。优先填补已识别的空缺。确保多样性。**只生成早餐、午餐、晚餐的建议。**
 4.  **分配日期/餐别：** 对于每个建议，分配一个有效的 'dayOfWeek'（必须是 ${daysOfWeekInternal.join(', ')} 中的一个）和一个有效的 'mealType'（必须是 ${mealTypesInternal.join(', ')} 中的一个）。请具体说明。
-5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数（例如，大于0）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
+5.  **估算成分：** 对于每个建议，提供一份主要“成分”的合理清单，并附有以克为单位的估算“数量”（例如，[{ name: "鸡胸肉", quantity: 150 }, { name: "西兰花", quantity: 100 }]）。确保份量合理，且数量为正数且大于0（例如，0.1克或更多）。这对后续的营养估算至关重要。成分列表不能为空。**所有成分名称必须是简体中文。**
 6.  **平衡：** 如果提供了上周的餐点，尝试建议能够补充或平衡上周营养状况的食谱（例如，如果上周肉类较多，建议更多素食选项）。
 7.  **格式化输出：** 严格按照 'GenerateWeeklyRecipesOutputSchema' 格式提供输出。每个建议的食谱必须包含 'name'（中文）、'description'（中文）、'dayOfWeek'（英文）、'mealType'（英文）和一个 'ingredients' 数组，其中每个成分都有 'name'（中文）和正数 'quantity'。如果适用，请包含整体的 'notes'（中文）。
 `,
@@ -183,9 +183,9 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         // Check for model not found error specifically
         if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
             // Ensure the model name logged matches the one used
-            const modelName = prompt.model?.name || '未知模型';
-            console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
-             throw new Error(`AI 提示执行失败：模型未找到。${errorMessage}`);
+            const modelNameUsed = prompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+            console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
+             throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
        // Throw generic AI error for other issues (in Chinese)
         throw new Error(`AI 提示执行失败: ${errorMessage}`);
@@ -282,3 +282,6 @@ function convertGeneratedToRecipe(genRecipe: z.infer<typeof GeneratedRecipeSchem
          carbohydrates: undefined,
      };
 }
+
+
+    
