@@ -69,7 +69,7 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 // Note: The prompt now receives recipe names with context
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Specify the model to use
+  model: 'gemini-1.5-flash-latest', // Specify the model to use
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -203,3 +203,4 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
     }
   }
 );
+

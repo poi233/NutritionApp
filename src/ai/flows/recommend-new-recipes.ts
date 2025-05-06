@@ -36,7 +36,7 @@ export async function recommendNewRecipes(input: RecommendNewRecipesInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'recommendNewRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Specify the model to use
+  model: 'gemini-1.5-flash-latest', // Specify the model to use
   input: {schema: RecommendNewRecipesInputSchema},
   output: {schema: RecommendNewRecipesOutputSchema},
   prompt: `You are a recipe recommendation expert. You will recommend new recipes based on the dietary needs and preferences of the user.
