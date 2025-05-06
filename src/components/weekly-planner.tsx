@@ -62,7 +62,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     <Table className="border shadow-md rounded-md overflow-hidden">
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-           <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">日期</TableHead> {/* Day header */}
+          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[100px] min-w-[100px] font-semibold text-foreground text-center">日期</TableHead>
           {mealTypes.map(meal => (
             <TableHead key={meal} className="w-[180px] min-w-[180px] font-semibold text-center text-foreground">
               {meal}
@@ -73,24 +73,20 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
       <TableBody>
         {daysOfWeek.map(day => (
           <TableRow key={day}>
-            {/* Sticky Day cell */}
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[120px]"> {/* Align top for consistency */}
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[120px]">
               {day}
             </TableCell>
-            {/* Recipe cells for the meal types */}
             {mealTypes.map(meal => {
               const slotRecipes = getRecipesForSlot(day, meal);
               return (
-                <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]"> {/* Use align-top */}
-                  {/* Container for multiple recipe cards */}
+                <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]">
                   <div className="space-y-2">
                      {slotRecipes.length > 0 ? (
                        slotRecipes.map(recipe => (
-                          <Card key={recipe.id} className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[80px]"> {/* Adjusted min-height for multiple cards */}
+                          <Card key={recipe.id} className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[80px]">
                             <CardHeader className="flex flex-row items-start justify-between p-2 pb-1">
                               <CardTitle className="text-sm font-medium leading-tight flex-1 mr-1 truncate">{recipe.name}</CardTitle>
                               <div className="flex items-center space-x-1">
-                                {/* Info Popover */}
                                 {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
                                   <Popover>
                                     <PopoverTrigger asChild>
@@ -113,7 +109,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                       {(recipe.ingredients && recipe.ingredients.length > 0) && (
                                           <div className="mt-2 pt-2 border-t">
                                                <p><strong>{ingredientsLabel}:</strong></p>
-                                              <ul className="list-disc pl-4 text-xs"> {/* Smaller text for ingredients list */}
+                                              <ul className="list-disc pl-4 text-xs">
                                                   {recipe.ingredients.map(ing => (
                                                       <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}克)</li>
                                                   ))}
@@ -123,7 +119,6 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                     </PopoverContent>
                                   </Popover>
                                 )}
-                                {/* Delete Button */}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -135,7 +130,6 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                 </Button>
                               </div>
                             </CardHeader>
-                            {/* Display estimated calories in footer if available */}
                             {recipe.calories !== undefined && (
                                <CardFooter className="p-2 pt-0 mt-auto">
                                   <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} {caloriesLabel} (估算)</p>
@@ -144,7 +138,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                           </Card>
                         ))
                      ) : (
-                       <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[80px]"> {/* Ensure min height for empty slots */}
+                       <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[80px]">
                           {emptyLabel}
                        </div>
                      )}
@@ -158,4 +152,3 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
-
