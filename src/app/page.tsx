@@ -41,6 +41,18 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
     let totalFat = 0;
     let totalCarbohydrates = 0;
 
+    // Ensure recipe has ingredients before attempting calculation
+    if (!recipe.ingredients || recipe.ingredients.length === 0) {
+        console.warn(`Recipe "${recipe.name}" has no ingredients for nutrition estimation.`);
+        return {
+            ...recipe,
+            calories: 0,
+            protein: 0,
+            fat: 0,
+            carbohydrates: 0,
+        };
+    }
+
     for (const ingredient of recipe.ingredients) {
         try {
           // Use a default quantity if missing (though the form requires it)
@@ -181,8 +193,8 @@ export default function Home() {
         ingredients: newRecipeData.ingredients
           .filter(ing => ing.name && ing.quantity > 0) // Filter out empty/invalid ingredients before processing
           .map((ing, index) => ({
-            ...ing,
-            id: `ingredient-${recipeId}-${index}`,
+            id: `ingredient-${recipeId}-${index}`, // Assign final ingredient ID here
+            name: ing.name,
             quantity: Number(ing.quantity) || 0, // Ensure quantity is a number
           })),
         // Initialize nutrition fields
@@ -416,8 +428,8 @@ export default function Home() {
 
       // Add generated recipes to the current week's plan
       if (result.suggestedRecipes.length > 0) {
-         const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe) => {
-           const recipeId = `recipe-gen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+         const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe, index) => {
+           const recipeId = `recipe-gen-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 
             // Basic validation for day/meal from AI
            const validDay = daysOfWeek.includes(genRecipe.dayOfWeek) ? genRecipe.dayOfWeek : daysOfWeek[0]; // Default to Monday
@@ -427,7 +439,14 @@ export default function Home() {
              id: recipeId,
              name: genRecipe.name || "Generated Meal",
              description: genRecipe.description || "AI suggested meal.",
-             ingredients: [], // Generated recipes initially have no ingredients defined
+             // Use ingredients from the AI response, ensuring they have valid structure and assign IDs
+             ingredients: (genRecipe.ingredients || [])
+                            .filter(ing => ing.name && ing.quantity > 0)
+                            .map((ing, ingIndex) => ({
+                                id: `ingredient-gen-${recipeId}-${ingIndex}`,
+                                name: ing.name,
+                                quantity: Number(ing.quantity) || 0, // Ensure quantity is number
+                            })),
              weekStartDate: currentWeekStartDate,
              dayOfWeek: validDay,
              mealType: validMeal,
@@ -436,8 +455,25 @@ export default function Home() {
              fat: undefined,
              carbohydrates: undefined,
            };
-            // Note: Nutrition estimation won't run here as ingredients are empty.
-           // User would need to edit the meal to add ingredients for estimation.
+
+           // Now, estimate nutrition using the generated ingredients
+           if (recipe.ingredients.length > 0) {
+               try {
+                   console.log(`Estimating nutrition for generated meal: ${recipe.name}`);
+                   recipe = await estimateRecipeNutrition(recipe);
+                   console.log(`Nutrition estimated for generated ${recipe.name}:`, {calories: recipe.calories, protein: recipe.protein, fat: recipe.fat, carbs: recipe.carbohydrates});
+               } catch (error) {
+                   console.error(`Error estimating nutrition for generated meal "${recipe.name}":`, error);
+                   toast({
+                       title: "Nutrition Estimation Failed",
+                       description: `Could not estimate nutrition for the generated meal: ${recipe.name}.`,
+                       variant: "destructive",
+                   });
+               }
+           } else {
+              console.log(`Generated recipe "${recipe.name}" has no valid ingredients, skipping nutrition estimation.`);
+           }
+
            return recipe;
          });
 
@@ -450,7 +486,7 @@ export default function Home() {
 
            toast({
               title: "Recipes Generated & Added",
-              description: `${generatedToAdd.length} new meal ideas added. Add ingredients to estimate nutrition.`,
+              description: `${generatedToAdd.length} new meal ideas added with estimated nutrition. You can edit them further.`,
               duration: 5000, // Longer duration
            });
            // Also show any notes from the generation
@@ -594,3 +630,4 @@ export default function Home() {
     </main>
   );
 }
+

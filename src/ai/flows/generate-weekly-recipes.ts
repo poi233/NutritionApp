@@ -9,7 +9,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { google } from "@ai-sdk/google"; // Keep import if used elsewhere, but model name needs prefix
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const mealTypes = ["Breakfast", "Lunch", "Dinner", "Snack"];
@@ -25,17 +24,23 @@ const GenerateWeeklyRecipesInputSchema = z.object({
 });
 export type GenerateWeeklyRecipesInput = z.infer<typeof GenerateWeeklyRecipesInputSchema>;
 
+const GeneratedIngredientSchema = z.object({
+    name: z.string().describe('The name of the estimated ingredient.'),
+    quantity: z.number().positive().describe('The estimated quantity of the ingredient in grams.'),
+});
+
 const GeneratedRecipeSchema = z.object({
     name: z.string().describe('The name of the generated recipe suggestion.'),
     description: z.string().describe('A brief description of the recipe.'),
     // Add validation for day and meal types using zod enum
     dayOfWeek: z.enum(daysOfWeek as [string, ...string[]]).describe('The suggested day of the week for this meal.'),
     mealType: z.enum(mealTypes as [string, ...string[]]).describe('The suggested meal type for this meal.'),
-    // Potential future enhancement: include estimated ingredients
+    // Generate estimated ingredients
+    ingredients: z.array(GeneratedIngredientSchema).min(1).describe('An estimated list of ingredients with quantities in grams for this recipe.'),
 });
 
 const GenerateWeeklyRecipesOutputSchema = z.object({
-  suggestedRecipes: z.array(GeneratedRecipeSchema).describe('A list of suggested recipes with their assigned day and meal type for the specified week.'),
+  suggestedRecipes: z.array(GeneratedRecipeSchema).describe('A list of suggested recipes with their assigned day, meal type, and estimated ingredients for the specified week.'),
   notes: z.string().optional().describe('Any additional notes or comments on the suggestions, e.g., regarding nutritional balance or variety.'),
 });
 export type GenerateWeeklyRecipesOutput = z.infer<typeof GenerateWeeklyRecipesOutputSchema>;
@@ -68,6 +73,13 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
          throw new Error(`Failed to generate weekly recipes: Invalid Google AI API Key or Authentication Error. Please check the GOOGLE_API_KEY environment variable and ensure it's correct and active. Original error: ${errorMessage}`);
      }
 
+     // Check for model not found specifically
+     if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
+          const modelName = prompt.model?.name || 'Unknown Model';
+          console.error(`The specified model in generateWeeklyRecipesPrompt ('${modelName}') was not found or is invalid.`);
+          throw new Error(`Failed to generate weekly recipes: AI model not found. ${errorMessage}`);
+     }
+
      // Re-throw other errors
      throw new Error(`Failed to generate weekly recipes: ${errorMessage}`);
    }
@@ -75,8 +87,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  // Use the 'googleai/' prefix and a stable model name.
-  // 'gemini-1.5-flash' is generally available. 'latest' might cause issues.
+  // Use the 'googleai/' prefix and a stable, available model name.
   model: 'googleai/gemini-1.5-flash',
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
@@ -99,8 +110,9 @@ Consider the following user information:
 2.  **Identify Gaps:** Determine which days/meal slots are empty in the current week.
 3.  **Generate Suggestions:** Create {{numberOfSuggestions}} meal suggestions that fit the user's dietary needs and preferences. Prioritize filling the identified gaps. Ensure variety.
 4.  **Assign Day/Meal:** For EACH suggestion, assign a valid 'dayOfWeek' (exactly one of: ${daysOfWeek.join(', ')}) and 'mealType' (exactly one of: ${mealTypes.join(', ')}). Be specific.
-5.  **Balance:** If previous week's meals are provided, try to suggest recipes that complement or balance the previous week's nutritional profile (e.g., if last week was heavy on meat, suggest more vegetarian options).
-6.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', and 'mealType'. Include overall 'notes' if applicable.
+5.  **Estimate Ingredients:** For EACH suggestion, provide a plausible list of main 'ingredients' with estimated 'quantity' in grams (e.g., [{ name: "Chicken Breast", quantity: 150 }, { name: "Broccoli", quantity: 100 }]). Aim for reasonable portion sizes. This is crucial for later nutritional estimation. The ingredients list must not be empty.
+6.  **Balance:** If previous week's meals are provided, try to suggest recipes that complement or balance the previous week's nutritional profile (e.g., if last week was heavy on meat, suggest more vegetarian options).
+7.  **Format Output:** Provide the output strictly matching the 'GenerateWeeklyRecipesOutputSchema'. Each suggested recipe must have a 'name', 'description', 'dayOfWeek', 'mealType', and an 'ingredients' array. Include overall 'notes' if applicable.
 `,
 });
 
@@ -161,6 +173,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
          // Attempt to salvage: Filter valid recipes and provide default notes
          const salvageableRecipes = (output?.suggestedRecipes || []).filter(recipe => {
             try {
+                // Ensure generated ingredients are also validated
                 GeneratedRecipeSchema.parse(recipe);
                 return true;
             } catch {
@@ -171,8 +184,9 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
 
           return {
               suggestedRecipes: salvageableRecipes,
-              notes: output?.notes || "AI generated recipes, but some might be invalid or incomplete due to formatting issues."
+              notes: output?.notes || "AI generated recipes, but some might be invalid or incomplete due to formatting issues (especially ingredients)."
           };
      }
   }
 );
+
