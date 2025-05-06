@@ -69,7 +69,7 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 // Note: The prompt now receives recipe names with context
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Changed model name
+  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -173,6 +173,11 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             if (aiError instanceof Error && (aiError.message.includes('API key not valid') || aiError.message.includes('API_KEY_INVALID'))) {
                  console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
                  throw new Error(`AI prompt execution failed: Invalid Google AI API Key. ${aiError.message}`);
+            }
+            // Check for model not found error specifically
+            if (aiError instanceof Error && aiError.message.includes('Model') && aiError.message.includes('not found')) {
+               console.error(`The specified model in analyzeNutritionalBalancePrompt ('${analyzeNutritionalBalancePrompt.model?.name}') was not found or is invalid.`);
+               throw new Error(`AI prompt execution failed: ${aiError.message}`);
             }
             throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
         }

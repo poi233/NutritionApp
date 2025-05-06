@@ -56,7 +56,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateWeeklyRecipesPrompt',
-  model: 'googleai/gemini-1.5-flash-latest',
+  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
   input: { schema: GenerateWeeklyRecipesInputSchema },
   output: { schema: GenerateWeeklyRecipesOutputSchema },
   prompt: `You are an expert meal planner and nutritionist. Generate approximately {{numberOfSuggestions}} diverse recipe suggestions to fill the meal plan for the week starting on {{weekStartDate}}. Assign each suggestion to a specific day (Monday-Sunday) and meal type (Breakfast, Lunch, Dinner, Snack).
@@ -111,6 +111,11 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         if (aiError instanceof Error && (aiError.message.includes('API key not valid') || aiError.message.includes('API_KEY_INVALID'))) {
              console.error("It seems like the Google AI API key is invalid or missing. Please check the GOOGLE_API_KEY environment variable.");
              throw new Error(`AI prompt execution failed: Invalid Google AI API Key. ${aiError.message}`);
+        }
+        // Check for model not found error specifically
+        if (aiError instanceof Error && aiError.message.includes('Model') && aiError.message.includes('not found')) {
+            console.error(`The specified model in generateWeeklyRecipesPrompt ('${prompt.model?.name}') was not found or is invalid.`);
+            throw new Error(`AI prompt execution failed: ${aiError.message}`);
         }
        throw new Error(`AI prompt execution failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
     }

@@ -31,12 +31,30 @@ const RecommendNewRecipesOutputSchema = z.object({
 export type RecommendNewRecipesOutput = z.infer<typeof RecommendNewRecipesOutputSchema>;
 
 export async function recommendNewRecipes(input: RecommendNewRecipesInput): Promise<RecommendNewRecipesOutput> {
-  return recommendNewRecipesFlow(input);
+  try {
+    return await recommendNewRecipesFlow(input);
+  } catch (error) {
+      console.error("Error executing recommendNewRecipes function:", error);
+       // Check for specific API key error (example, adjust based on actual error message)
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during recommendation.";
+        const isApiKeyError = errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GOOGLE_API_KEY");
+        const isModelError = errorMessage.includes('Model') && errorMessage.includes('not found');
+
+        let userFriendlyMessage = `Failed to recommend recipes: ${errorMessage}`;
+        if (isApiKeyError) {
+            userFriendlyMessage = `Failed to recommend recipes: Invalid Google AI API Key. Please check your configuration.`;
+        } else if (isModelError) {
+             userFriendlyMessage = `Failed to recommend recipes: The configured AI model was not found.`;
+        }
+
+        // Re-throw with a potentially more user-friendly message or the original error
+        throw new Error(userFriendlyMessage);
+  }
 }
 
 const prompt = ai.definePrompt({
   name: 'recommendNewRecipesPrompt',
-  model: 'gemini-pro', // Changed model name
+  model: 'googleai/gemini-1.5-flash-latest', // Use a valid free model
   input: {schema: RecommendNewRecipesInputSchema},
   output: {schema: RecommendNewRecipesOutputSchema},
   prompt: `You are a recipe recommendation expert. You will recommend new recipes based on the dietary needs and preferences of the user.
@@ -55,8 +73,21 @@ const recommendNewRecipesFlow = ai.defineFlow(
     outputSchema: RecommendNewRecipesOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+     try {
+        console.log("Calling recommendNewRecipesPrompt with input:", input);
+        const {output} = await prompt(input);
+        if (!output) {
+             console.error('recommendNewRecipesPrompt returned null or undefined output.');
+             throw new Error('AI prompt failed to generate a valid output structure.');
+        }
+        console.log("recommendNewRecipesPrompt returned output:", output);
+        return output;
+     } catch (aiError) {
+         console.error("Error calling recommendNewRecipesPrompt:", aiError);
+         // Re-throw the specific AI error to be caught by the exported function's handler
+         throw aiError;
+     }
+
   }
 );
 
