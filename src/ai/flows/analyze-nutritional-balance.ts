@@ -81,7 +81,7 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 
       // Check for model not found specifically
       if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-         const modelNameUsed = analyzeNutritionalBalancePrompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+         const modelNameUsed = analyzeNutritionalBalancePromptModelName || '未知模型'; // Use the actual model name from the prompt
          console.error(`analyzeNutritionalBalancePrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
          throw new Error(`分析营养平衡失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
      }
@@ -92,10 +92,11 @@ export async function analyzeNutritionalBalance(input: AnalyzeNutritionalBalance
 }
 
 // Note: The prompt now receives recipe names with context
+const analyzeNutritionalBalancePromptModelName = 'googleai/gemini-1.5-flash';
 const analyzeNutritionalBalancePrompt = ai.definePrompt({
   name: 'analyzeNutritionalBalancePrompt',
   // Use the 'googleai/' prefix and a stable model name.
-  model: 'googleai/gemini-1.5-flash',
+  model: analyzeNutritionalBalancePromptModelName,
   // Pass the calculated nutritional data along with the original input structure to the prompt
   input: { schema: z.object({
       calculatedNutrition: z.array(AnalyzedRecipeSchema).describe("Pre-calculated nutritional breakdown for each recipe."),
@@ -233,7 +234,7 @@ const analyzeNutritionalBalanceFlow = ai.defineFlow(
             // Check for model not found error specifically
             if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
                // Ensure model name logged matches the one used
-               const modelName = analyzeNutritionalBalancePrompt.model?.name || '未知模型'; // Attempt to get model name
+               const modelName = analyzeNutritionalBalancePromptModelName || '未知模型'; // Use the predefined model name
                console.error(`analyzeNutritionalBalancePrompt 中指定的模型 ('${modelName}') 未找到或无效。`);
                 // Translate error message
                 throw new Error(`AI 提示执行失败：模型 ('${modelName}') 未找到。${errorMessage}`);
