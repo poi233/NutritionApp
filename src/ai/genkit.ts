@@ -40,12 +40,12 @@ try {
 
 export let ai = genkit({
   plugins: [
-    googleAIPlugin,
+    ...(googleAIPlugin ? [googleAIPlugin] : []),
      // defineDotprompt({ dir: path.join(__dirname, "../prompts") }), // Example if using .prompt files
   ],
   // Removed default model here, specify it in the prompt/generate call
-  logLevel: 'debug', // Enable detailed logging for development
-  enableTracing: true, // Enable tracing for debugging flows
+  // logLevel: 'debug', // Enable detailed logging for development (removed as it is not a valid property)
+  // Removed 'enableTracing' as it is not a valid property of 'GenkitOptions'
 });
 
 // Add an extra check after initialization to see if the key was truly picked up (optional)
@@ -56,12 +56,8 @@ if (googleApiKey) {
 }
 
 // List available models - ensure `ai` is initialized first
-if (ai && typeof ai.getAvailableModels === 'function') {
-  ai.getAvailableModels().then(models => {
-    console.log('[Genkit Init] Available Models:', models);
-  }).catch(err => {
-    console.error('[Genkit Init] Error getting available models:', err);
-  });
+if (ai) {
+  console.log('[Genkit Init] Genkit AI object initialized successfully.');
 } else {
-  console.warn('[Genkit Init] Could not retrieve available models because Genkit AI object was not properly initialized or getAvailableModels function is missing.');
+  console.warn('[Genkit Init] Genkit AI object was not properly initialized.');
 }
