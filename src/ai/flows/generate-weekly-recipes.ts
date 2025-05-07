@@ -98,7 +98,7 @@ export async function generateWeeklyRecipes(input: GenerateWeeklyRecipesInput): 
 
      // Check for model not found specifically
      if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
-          const modelNameUsed = prompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+          const modelNameUsed = 'googleai/gemini-1.5-flash'; // Use the consistent model name directly
           console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
           throw new Error(`生成每周食谱失败：AI 模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
      }
@@ -213,7 +213,7 @@ const generateWeeklyRecipesFlow = ai.defineFlow(
         // Check for model not found error specifically
         if (errorMessage.includes('Model') && (errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND'))) {
             // Ensure the model name logged matches the one used
-            const modelNameUsed = prompt.model?.name || '未知模型'; // Use the actual model name from the prompt
+            const modelNameUsed = 'googleai/gemini-1.5-flash'; // Use the consistent model name directly
             console.error(`generateWeeklyRecipesPrompt 中指定的模型 ('${modelNameUsed}') 未找到或无效。`);
              throw new Error(`AI 提示执行失败：模型 ('${modelNameUsed}') 未找到。${errorMessage}`);
         }
