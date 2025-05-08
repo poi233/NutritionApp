@@ -1,6 +1,9 @@
+
 "use client";
 
 import type { FC } from "react";
+import React, { useState } // Import useState
+from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,49 +11,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { PlusCircle, Trash2 } from 'lucide-react';
-import type { Recipe, Ingredient } from "@/types/recipe"; // Import Ingredient type
+import { PlusCircle, Trash2, Sparkles, RefreshCw } from 'lucide-react'; // Added Sparkles and RefreshCw
+import type { Recipe, Ingredient } from "@/types/recipe";
 import { format, parseISO } from 'date-fns';
-import { zhCN } from 'date-fns/locale'; // Import Chinese locale
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea
+import { zhCN } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { suggestRecipeDetails, type SuggestRecipeDetailsOutput } from "@/ai/flows/suggest-recipe-details"; // Import the new flow
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 // Ingredient schema now allows optional ID and requires positive quantity
 const ingredientSchema = z.object({
-  id: z.string().optional(), // Keep internal ID optional
-  name: z.string().min(1, "成分名称不能为空"), // "Ingredient name cannot be empty if added"
-  // Ensure quantity is a positive number, allowing decimals
-  quantity: z.coerce // Coerce input to number
-    .number({ invalid_type_error: "数量必须是数字" }) // "Quantity must be a number"
-    .min(0.1, "数量必须至少为 0.1") // "Quantity must be at least 0.1"
-    .positive("数量必须是正数"), // "Quantity must be positive"
+  id: z.string().optional(),
+  name: z.string().min(1, "成分名称不能为空"),
+  quantity: z.coerce
+    .number({ invalid_type_error: "数量必须是数字" })
+    .min(0.1, "数量必须至少为 0.1")
+    .positive("数量必须是正数"),
 });
 
 const recipeFormSchema = z.object({
-  name: z.string().min(1, "食谱名称是必填项"), // "Recipe name is required"
-  dayOfWeek: z.string().min(1, "星期是必填项"), // "Day of week is required"
-  mealType: z.string().min(1, "餐别是必填项"), // "Meal type is required"
-  // Ingredients array is now optional, but if present, elements must conform to ingredientSchema
+  name: z.string().min(1, "食谱名称是必填项"),
+  dayOfWeek: z.string().min(1, "星期是必填项"),
+  mealType: z.string().min(1, "餐别是必填项"),
   ingredients: z.array(ingredientSchema).optional(),
-  description: z.string().optional(), // Add optional description field
+  description: z.string().optional(),
 });
 
-// Use Omit to exclude fields managed by the parent (id, weekStartDate, nutrition)
-// Keep description as it's part of the form now
 export type RecipeFormData = Omit<Recipe, 'id' | 'weekStartDate' | 'calories' | 'protein' | 'fat' | 'carbohydrates'> & {
-    ingredients: Omit<Ingredient, 'id'>[]; // Ingredients in form data don't need final ID yet
+    ingredients: Omit<Ingredient, 'id'>[];
 };
 
-
-// Explicitly define the form shape based on the schema
 type HookFormShape = z.infer<typeof recipeFormSchema>;
 
 interface RecipeInputFormProps {
-  onAddRecipe: (recipe: RecipeFormData) => void; // Pass only the necessary data
-  currentWeekStartDate: string; // Receive the current week
-  daysOfWeek: string[]; // Receive translated days
-  mealTypes: string[]; // Receive translated meal types (already filtered in parent)
-  // Translation props
+  onAddRecipe: (recipe: RecipeFormData) => void;
+  currentWeekStartDate: string;
+  daysOfWeek: string[];
+  mealTypes: string[];
   addMealTitle: string;
   recipeNameLabel: string;
   recipeNamePlaceholder: string;
@@ -65,13 +63,14 @@ interface RecipeInputFormProps {
   quantityPlaceholder: string;
   addIngredientLabel: string;
   submitButtonLabel: string;
+  autoFillDetailsLabel?: string; // New prop for translation
 }
 
 export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     onAddRecipe,
     currentWeekStartDate,
     daysOfWeek,
-    mealTypes, // Receive the filtered meal types
+    mealTypes,
     addMealTitle,
     recipeNameLabel,
     recipeNamePlaceholder,
@@ -85,8 +84,11 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     ingredientNamePlaceholder,
     quantityPlaceholder,
     addIngredientLabel,
-    submitButtonLabel
+    submitButtonLabel,
+    autoFillDetailsLabel = "智能填充详情" // Default value for the new button
  }) => {
+  const { toast } = useToast();
+  const [isSuggestingDetails, setIsSuggestingDetails] = useState(false);
 
   const {
     register,
@@ -94,72 +96,125 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     handleSubmit,
     reset,
     formState: { errors },
-    setValue, // Add setValue to control Select components
-    watch // Add watch to update Select components if needed
-  } = useForm<HookFormShape>({ // Use the schema-based type for useForm
+    setValue,
+    watch,
+    getValues // Added getValues
+  } = useForm<HookFormShape>({
     resolver: zodResolver(recipeFormSchema),
     defaultValues: {
       name: "",
       dayOfWeek: "",
       mealType: "",
-      ingredients: [], // Start with empty ingredients array
+      ingredients: [],
       description: "",
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({ // Added replace
     control,
     name: "ingredients",
   });
 
   const onSubmit = (data: HookFormShape) => {
-    // Map the form data (HookFormShape) to the expected RecipeFormData
     const newRecipeData: RecipeFormData = {
       name: data.name,
       dayOfWeek: data.dayOfWeek,
       mealType: data.mealType,
-      description: data.description || "", // Ensure description is string or empty string
-      ingredients: (data.ingredients || []) // Ensure ingredients is an array
-        .filter(ing => ing.name && ing.quantity > 0) // Filter out any potentially invalid entries before passing
+      description: data.description || "",
+      ingredients: (data.ingredients || [])
+        .filter(ing => ing.name && ing.quantity > 0)
         .map((ing) => ({
-        // id: `temp-${Math.random().toString(16).slice(2)}`, // Parent will generate final ID
         name: ing.name,
         quantity: ing.quantity,
       })),
     };
     onAddRecipe(newRecipeData);
-    reset(); // Reset form after submission
+    reset();
   };
 
   const handleAddNewIngredient = () => {
-     // Append with a default quantity that passes validation if user doesn't change it
      append({ name: "", quantity: 1 });
   };
 
-  // Watch selected values for Select components
+  const handleSuggestDetails = async () => {
+    const mealName = getValues("name");
+    if (!mealName) {
+      toast({
+        title: "请输入餐点名称",
+        description: "需要餐点名称才能获取建议。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSuggestingDetails(true);
+    try {
+      const result: SuggestRecipeDetailsOutput = await suggestRecipeDetails({ mealName });
+      setValue("description", result.description, { shouldValidate: true, shouldDirty: true });
+
+      // Map AI ingredients to form ingredient shape (without ID)
+      const suggestedIngredientsForForm = result.ingredients.map(ing => ({
+        name: ing.name,
+        quantity: ing.quantity,
+      }));
+      // Replace existing ingredients with AI suggestions
+      replace(suggestedIngredientsForForm);
+
+      toast({
+        title: "详情已填充",
+        description: `已为 "${mealName}" 自动填充描述和成分。`,
+      });
+    } catch (error) {
+      console.error("获取餐点详情建议时出错:", error);
+      const errorMessage = error instanceof Error ? error.message : "无法获取建议。";
+      toast({
+        title: "填充失败",
+        description: errorMessage.startsWith("获取餐点详情失败：") ? errorMessage.substring("获取餐点详情失败：".length) : errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSuggestingDetails(false);
+    }
+  };
+
+
   const selectedDay = watch("dayOfWeek");
   const selectedMeal = watch("mealType");
+  const currentMealName = watch("name");
 
   return (
-    <Card className="w-full shadow-none border-0"> {/* Adjusted styling */}
-      <CardHeader className="p-0 pb-4"> {/* Adjusted padding */}
-        <CardTitle className="text-lg font-semibold text-center"> {/* Adjusted size */}
+    <Card className="w-full shadow-none border-0">
+      <CardHeader className="p-0 pb-4">
+        <CardTitle className="text-lg font-semibold text-center">
              {addMealTitle} {format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN })} 周
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0"> {/* Adjusted padding */}
-        {/* Assign an ID to the form for the CardFooter button to reference */}
+      <CardContent className="p-0">
         <form id="recipe-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
              <Label htmlFor="recipeName" className="block text-sm font-medium mb-1">{recipeNameLabel}</Label>
-            <Input
-              id="recipeName"
-              {...register("name")}
-              placeholder={recipeNamePlaceholder}
-              className="w-full"
-              aria-invalid={errors.name ? "true" : "false"}
-              required // HTML5 required
-            />
+             <div className="flex items-center gap-2">
+                <Input
+                  id="recipeName"
+                  {...register("name")}
+                  placeholder={recipeNamePlaceholder}
+                  className="w-full"
+                  aria-invalid={errors.name ? "true" : "false"}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleSuggestDetails}
+                  disabled={isSuggestingDetails || !currentMealName}
+                  title={autoFillDetailsLabel}
+                  className="shrink-0"
+                >
+                  {isSuggestingDetails ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <span className="sr-only">{autoFillDetailsLabel}</span>
+                </Button>
+             </div>
             {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
           </div>
 
@@ -169,7 +224,7 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
                  <Select
                    value={selectedDay}
                    onValueChange={(value) => setValue("dayOfWeek", value, { shouldValidate: true })}
-                   required // HTML5 required
+                   required
                  >
                     <SelectTrigger id="dayOfWeek" aria-invalid={errors.dayOfWeek ? "true" : "false"}>
                       <SelectValue placeholder={dayOfWeekPlaceholder} />
@@ -188,7 +243,7 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
                  <Select
                    value={selectedMeal}
                    onValueChange={(value) => setValue("mealType", value, { shouldValidate: true })}
-                   required // HTML5 required
+                   required
                   >
                     <SelectTrigger id="mealType" aria-invalid={errors.mealType ? "true" : "false"}>
                       <SelectValue placeholder={mealTypePlaceholder} />
@@ -203,7 +258,6 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
               </div>
            </div>
 
-           {/* Description Field */}
             <div>
                  <Label htmlFor="description" className="block text-sm font-medium mb-1">{descriptionLabel}</Label>
                 <Textarea
@@ -223,7 +277,7 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
               {fields.map((field, index) => (
                 <div key={field.id} className="flex items-start space-x-2">
                   <div className="flex-1 space-y-1">
-                     <Label htmlFor={`ingredients.${index}.name`} className="sr-only">成分名称</Label> {/* Ingredient Name */}
+                     <Label htmlFor={`ingredients.${index}.name`} className="sr-only">成分名称</Label>
                     <Input
                       id={`ingredients.${index}.name`}
                       placeholder={ingredientNamePlaceholder}
@@ -235,14 +289,14 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
                       <p className="text-destructive text-xs">{errors.ingredients[index]?.name?.message}</p>
                     )}
                   </div>
-                  <div className="w-24 space-y-1"> {/* Slightly narrower width */}
-                       <Label htmlFor={`ingredients.${index}.quantity`} className="sr-only">数量 (克)</Label> {/* Quantity (g) */}
+                  <div className="w-24 space-y-1">
+                       <Label htmlFor={`ingredients.${index}.quantity`} className="sr-only">数量 (克)</Label>
                      <Input
                         id={`ingredients.${index}.quantity`}
                         placeholder={quantityPlaceholder}
                         type="number"
-                        step="0.1" // Allow increments of 0.1
-                        min="0.1"  // HTML5 min validation
+                        step="0.1"
+                        min="0.1"
                         {...register(`ingredients.${index}.quantity`)}
                         className="w-full"
                         aria-invalid={errors.ingredients?.[index]?.quantity ? "true" : "false"}
@@ -256,15 +310,14 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
                      variant="ghost"
                      size="icon"
                      onClick={() => remove(index)}
-                     className="text-destructive hover:bg-destructive/10 mt-1 shrink-0" // Added shrink-0
-                      aria-label={`移除成分 ${index + 1}`} // `Remove ingredient ${index + 1}`
+                     className="text-destructive hover:bg-destructive/10 mt-1 shrink-0"
+                      aria-label={`移除成分 ${index + 1}`}
                    >
                      <Trash2 className="h-4 w-4" />
                    </Button>
                 </div>
               ))}
             </div>
-             {/* Display root errors for the ingredients array if any (e.g., min length error if schema enforced it) */}
              {errors.ingredients?.root && <p className="text-destructive text-xs mt-2">{errors.ingredients.root.message}</p>}
 
           </div>
@@ -273,15 +326,14 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
             type="button"
             variant="outline"
             onClick={handleAddNewIngredient}
-            className="w-full justify-start text-sm text-muted-foreground" // Adjusted style
+            className="w-full justify-start text-sm text-muted-foreground"
           >
             <PlusCircle className="mr-2 h-4 w-4" />
              {addIngredientLabel}
           </Button>
         </form>
       </CardContent>
-       <CardFooter className="flex justify-end pt-4 p-0"> {/* Adjusted padding */}
-          {/* Trigger the form submission via the form's ID */}
+       <CardFooter className="flex justify-end pt-4 p-0">
            <Button type="submit" form="recipe-form" className="bg-primary text-primary-foreground hover:bg-primary/90">
              {submitButtonLabel}
           </Button>

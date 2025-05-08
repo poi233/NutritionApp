@@ -1,20 +1,19 @@
-
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react"; // Added React import
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { Recipe, Ingredient } from "@/types/recipe";
 import { RecipeInputForm, type RecipeFormData } from "@/components/recipe-input-form";
 import { WeeklyPlanner } from "@/components/weekly-planner";
 import { NutritionalAnalysis } from "@/components/nutritional-analysis";
 import { PreferencesForm } from "@/components/preferences-form";
-import { WeeklySummary } from "@/components/weekly-summary"; // Import WeeklySummary
+import { WeeklySummary } from "@/components/weekly-summary";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
 import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, ShoppingCart } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
-import { zhCN } from 'date-fns/locale'; // Import Chinese locale for date formatting
+import { zhCN } from 'date-fns/locale';
 import {
   Dialog,
   DialogContent,
@@ -31,10 +30,11 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
+    AlertDialogTrigger, // Added missing import
 } from "@/components/ui/alert-dialog"
-import { getNutrition } from "@/services/nutrition"; // Import nutrition service
-import { estimateTotalPriceForIngredients, type AggregatedIngredient } from "@/services/pricing"; // Import pricing service
+import { getNutrition } from "@/services/nutrition";
+import { estimateTotalPriceForIngredients, type AggregatedIngredient } from "@/services/pricing";
+import { INGREDIENT_CATEGORIES_ORDERED, groupIngredientsByCategory, type IngredientCategory } from "@/lib/ingredient-categories";
 
 
 // Basic Error Boundary for client-side component errors
@@ -45,18 +45,15 @@ class ClientErrorBoundary extends React.Component<{ children: React.ReactNode, f
   }
 
   static getDerivedStateFromError(error: Error) {
-    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // You can also log the error to an error reporting service
     console.error("客户端组件错误边界捕获:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      // You can render any custom fallback UI
       return this.props.fallback || (
           <div className="w-full p-4 border border-destructive rounded-md bg-destructive/10 text-destructive">
             <h2 className="font-bold flex items-center gap-2"><AlertTriangle size={18} /> 组件加载时出错</h2>
@@ -75,24 +72,19 @@ interface UserPreferences {
   preferences?: string;
 }
 
-// Translated days and meal types
 const daysOfWeek = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-// Removed "点心" (Snack)
 const mealTypes = ["早餐", "午餐", "晚餐"];
 
-// Helper to get the start of the week (assuming Monday start)
 const getWeekStartDate = (date: Date): string => {
   return format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 };
 
-// Helper to estimate nutrition for a single recipe
 const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
     let totalCalories = 0;
     let totalProtein = 0;
     let totalFat = 0;
     let totalCarbohydrates = 0;
 
-    // Ensure recipe has ingredients before attempting calculation
     if (!recipe.ingredients || recipe.ingredients.length === 0) {
         console.warn(`食谱 "${recipe.name}" 没有用于营养估算的成分。`);
         return {
@@ -106,12 +98,11 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
 
     for (const ingredient of recipe.ingredients) {
         try {
-          // Use a default quantity if missing (though the form requires it)
           const quantity = ingredient.quantity || 0;
-          if (quantity <= 0) continue; // Skip if quantity is zero or less
+          if (quantity <= 0) continue;
 
           const nutrition = await getNutrition(ingredient.name);
-          const factor = quantity / 100; // Assuming nutrition data is per 100g
+          const factor = quantity / 100;
 
           totalCalories += (nutrition.calories || 0) * factor;
           totalProtein += (nutrition.protein || 0) * factor;
@@ -119,7 +110,6 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
           totalCarbohydrates += (nutrition.carbohydrates || 0) * factor;
         } catch (error) {
              console.warn(`估算食谱 "${recipe.name}" 时无法获取成分 "${ingredient.name}" 的营养信息：`, error);
-             // Optionally assign default/zero values or handle differently
         }
     }
 
@@ -132,7 +122,6 @@ const estimateRecipeNutrition = async (recipe: Recipe): Promise<Recipe> => {
     };
 };
 
-// Mapping for translating English day/meal from AI to Chinese for UI
 const daysOfWeekChineseMapReverse: { [key: string]: string } = {
   Monday: "周一", Tuesday: "周二", Wednesday: "周三", Thursday: "周四", Friday: "周五", Saturday: "周六", Sunday: "周日"
 };
@@ -142,43 +131,38 @@ const mealTypesChineseMapReverse: { [key: string]: string } = {
 
 
 export default function Home() {
-  console.log("Home component rendering/re-rendering."); // Log component render
+  console.log("Home component rendering/re-rendering.");
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
-  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(() => getWeekStartDate(new Date())); // Initialize directly
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(() => getWeekStartDate(new Date()));
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
-  // Set default preference to Chinese food
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
-  const [isLoadingPrice, setIsLoadingPrice] = useState(false); // State for price loading
-  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null); // State for estimated price
-  const [isAddRecipeDialogOpen, setIsAddRecipeDialogOpen] = useState(false); // State for dialog
-  const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false); // State for clear week confirmation
-  const [isClient, setIsClient] = useState(false); // Track client-side rendering
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [isAddRecipeDialogOpen, setIsAddRecipeDialogOpen] = useState(false);
+  const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
 
-  // Track client-side rendering to avoid hydration mismatches with localStorage
   useEffect(() => {
     console.log("Home component mounted on client.");
     setIsClient(true);
-    // Set initial week start date on client mount
     const initialWeekStart = getWeekStartDate(new Date());
     console.log("Setting initial week start date:", initialWeekStart);
     setCurrentWeekStartDate(initialWeekStart);
   }, []);
 
-  // Derived state for recipes of the current week
   const currentWeekRecipes = useMemo(() => {
        if (!isClient) {
            console.log("Deriving currentWeekRecipes (server-side): returning empty array.");
-           return []; // Return empty array on server
+           return [];
        }
        const recipesForWeek = weeklyRecipes[currentWeekStartDate] || [];
         console.log(`Deriving currentWeekRecipes for ${currentWeekStartDate} (client-side): Found ${recipesForWeek.length} recipes.`);
       return recipesForWeek;
   }, [weeklyRecipes, currentWeekStartDate, isClient]);
 
-  // Aggregate ingredients for the current week
   const aggregatedIngredientsForCurrentWeek = useMemo(() => {
     if (!isClient || currentWeekRecipes.length === 0) {
       return [];
@@ -200,11 +184,10 @@ export default function Home() {
     }));
   }, [currentWeekRecipes, isClient]);
 
-  // Estimate total price for aggregated ingredients
   useEffect(() => {
     if (isClient && aggregatedIngredientsForCurrentWeek.length > 0) {
       setIsLoadingPrice(true);
-      setEstimatedPrice(null); // Clear previous price
+      setEstimatedPrice(null);
       console.log("Estimating price for aggregated ingredients:", aggregatedIngredientsForCurrentWeek);
       estimateTotalPriceForIngredients(aggregatedIngredientsForCurrentWeek)
         .then(price => {
@@ -224,14 +207,12 @@ export default function Home() {
           setIsLoadingPrice(false);
         });
     } else if (isClient && aggregatedIngredientsForCurrentWeek.length === 0) {
-        // If there are no ingredients, set price to 0 and don't show loading
         setEstimatedPrice(0);
         setIsLoadingPrice(false);
     }
   }, [aggregatedIngredientsForCurrentWeek, isClient, toast]);
 
 
-  // Load data from localStorage on initial client-side render
    useEffect(() => {
      if (isClient) {
         console.log("Attempting to load data from localStorage.");
@@ -250,16 +231,15 @@ export default function Home() {
          if (storedPreferences) {
              const parsedPrefs = JSON.parse(storedPreferences);
              console.log("Loaded preferences from localStorage:", parsedPrefs);
-             // Load only if they differ from the new default
              if (JSON.stringify(parsedPrefs) !== JSON.stringify(defaultPrefs)) {
                  setUserPreferences(parsedPrefs);
              } else {
                  console.log("Stored preferences match default, using default.");
-                 setUserPreferences(defaultPrefs); // Ensure state is set even if matching
+                 setUserPreferences(defaultPrefs);
              }
          } else {
             console.log("No preferences found in localStorage, saving default.");
-            setUserPreferences(defaultPrefs); // Set default state
+            setUserPreferences(defaultPrefs);
             localStorage.setItem("nutrijournal_preferences", JSON.stringify(defaultPrefs));
          }
        } catch (error) {
@@ -271,10 +251,9 @@ export default function Home() {
          });
        }
      }
-   }, [isClient, toast]); // Add toast dependency
+   }, [isClient, toast]);
 
 
-  // Save weekly recipes to localStorage whenever they change (only on client)
   useEffect(() => {
      if (isClient) {
         console.log("Weekly recipes changed, attempting to save to localStorage:", weeklyRecipes);
@@ -283,17 +262,15 @@ export default function Home() {
              localStorage.setItem("nutrijournal_weekly_recipes", JSON.stringify(weeklyRecipes));
              console.log("Saved weekly recipes to localStorage.");
            } else {
-              localStorage.removeItem("nutrijournal_weekly_recipes"); // Clear if empty
+              localStorage.removeItem("nutrijournal_weekly_recipes");
               console.log("Removed weekly recipes from localStorage (object was empty).");
            }
        } catch (error) {
           console.error("将每周食谱保存到 localStorage 时出错:", error);
-          // Optional: Show a toast, but might be too noisy
        }
      }
   }, [weeklyRecipes, isClient]);
 
-   // Save preferences to localStorage whenever they change (only on client)
    useEffect(() => {
      if (isClient) {
         console.log("User preferences changed, attempting to save to localStorage:", userPreferences);
@@ -302,27 +279,24 @@ export default function Home() {
              console.log("Saved preferences to localStorage.");
         } catch (error) {
              console.error("将偏好保存到 localStorage 时出错:", error);
-              // Optional: Show a toast
         }
      }
    }, [userPreferences, isClient]);
 
-   // Clear analysis and estimated price when week changes
    useEffect(() => {
       console.log("Current week changed to:", currentWeekStartDate, "Clearing nutritional analysis and estimated price.");
      setNutritionalAnalysis(null);
-     setEstimatedPrice(null); // Clear price when week changes
+     setEstimatedPrice(null);
    }, [currentWeekStartDate]);
 
-   // --- Week Navigation ---
    const goToPreviousWeek = () => {
-      if (!isClient) return; // Prevent server-side execution
+      if (!isClient) return;
        console.log("Navigating to previous week.");
       setCurrentWeekStartDate(prev => getWeekStartDate(subWeeks(parseISO(prev), 1)));
    };
 
    const goToNextWeek = () => {
-      if (!isClient) return; // Prevent server-side execution
+      if (!isClient) return;
        console.log("Navigating to next week.");
       setCurrentWeekStartDate(prev => getWeekStartDate(addWeeks(parseISO(prev), 1)));
    };
@@ -335,39 +309,35 @@ export default function Home() {
       try {
         const start = parseISO(startDate);
         const end = endOfWeek(start, { weekStartsOn: 1 });
-        // Use Chinese locale for formatting
         return `${format(start, 'MMM d', { locale: zhCN })} - ${format(end, 'MMM d, yyyy', { locale: zhCN })}`;
       } catch (error) {
           console.error("格式化周显示时出错:", error, "Input:", startDate);
-          return "无效日期"; // Fallback for invalid date string
+          return "无效日期";
       }
    }
 
-   // --- Recipe Management ---
    const handleAddRecipe = useCallback(async (newRecipeData: RecipeFormData) => {
     if (!isClient) return;
      console.log("handleAddRecipe called with data:", newRecipeData);
-    const recipeId = `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`; // More robust ID
+    const recipeId = `recipe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     let newRecipe: Recipe = {
         ...newRecipeData,
         id: recipeId,
         weekStartDate: currentWeekStartDate,
         ingredients: newRecipeData.ingredients
-          .filter(ing => ing.name && ing.quantity > 0) // Filter out empty/invalid ingredients before processing
+          .filter(ing => ing.name && ing.quantity > 0)
           .map((ing, index) => ({
-            id: `ingredient-${recipeId}-${index}`, // Assign final ingredient ID here
+            id: `ingredient-${recipeId}-${index}`,
             name: ing.name,
-            quantity: Number(ing.quantity) || 0, // Ensure quantity is a number
+            quantity: Number(ing.quantity) || 0,
           })),
-        // Initialize nutrition fields
         calories: undefined,
         protein: undefined,
         fat: undefined,
         carbohydrates: undefined,
-        description: newRecipeData.description || "", // Ensure description exists
+        description: newRecipeData.description || "",
     };
 
-    // Estimate nutrition only if valid ingredients are present
     if (newRecipe.ingredients.length > 0) {
       try {
         console.log(`正在为 ${newRecipe.name} 估算营养...`);
@@ -393,19 +363,19 @@ export default function Home() {
       return newState;
     }));
 
-     setNutritionalAnalysis(null); // Clear analysis when a recipe is added
-     setEstimatedPrice(null); // Clear price when a recipe is added
-     setIsAddRecipeDialogOpen(false); // Close dialog
+     setNutritionalAnalysis(null);
+     setEstimatedPrice(null);
+     setIsAddRecipeDialogOpen(false);
     toast({
       title: "餐点已添加",
       description: `${newRecipe.dayOfWeek} ${newRecipe.mealType} 的 ${newRecipe.name} 已添加。`,
     });
-  }, [currentWeekStartDate, toast, isClient]); // Added toast dependency
+  }, [currentWeekStartDate, toast, isClient]);
 
   const handleDeleteRecipe = (recipeId: string) => {
      if (!isClient) return;
       console.log("handleDeleteRecipe called for recipe ID:", recipeId);
-     let deletedRecipeName = "餐点"; // Default name
+     let deletedRecipeName = "餐点";
      setWeeklyRecipes((prevWeekly) => {
         const weekRecipes = prevWeekly[currentWeekStartDate] || [];
         const recipeToDelete = weekRecipes.find(r => r.id === recipeId);
@@ -414,33 +384,28 @@ export default function Home() {
              console.log(`Found recipe to delete: ${deletedRecipeName}`);
         } else {
              console.warn(`Recipe with ID ${recipeId} not found in current week ${currentWeekStartDate} for deletion.`);
-             return prevWeekly; // No change if recipe not found
+             return prevWeekly;
         }
 
         const updatedWeek = weekRecipes.filter(recipe => recipe.id !== recipeId);
          console.log(`Recipes remaining in week ${currentWeekStartDate} after deletion:`, updatedWeek.length);
 
-         // Check if the entire weeklyRecipes object should become empty after removing the week's key
          if (updatedWeek.length === 0) {
               console.log(`Removing week key ${currentWeekStartDate} as it's now empty.`);
-              // Remove just the current week's key if it becomes empty
               const { [currentWeekStartDate]: _, ...rest } = prevWeekly;
-              // If removing the week makes the whole object empty
               if (Object.keys(rest).length === 0) {
                    console.log("Weekly recipes object is now completely empty.");
-                  return {}; // Reset to empty object
+                  return {};
               }
               console.log("Remaining weeks:", Object.keys(rest));
               return rest;
          }
-        // Otherwise, update the specific week
         const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
          console.log("New weeklyRecipes state after deletion:", newState);
         return newState;
      });
-      // Clear previous analysis/recommendations when a recipe is deleted from the current week
      setNutritionalAnalysis(null);
-     setEstimatedPrice(null); // Clear price when a recipe is deleted
+     setEstimatedPrice(null);
       toast({
         title: "餐点已移除",
         description: `"${deletedRecipeName}" 已从此周计划中移除。`,
@@ -453,25 +418,23 @@ export default function Home() {
        console.log("handleRemoveAllRecipes called for week:", currentWeekStartDate);
         setWeeklyRecipes((prevWeekly) => {
             const { [currentWeekStartDate]: _, ...rest } = prevWeekly;
-            // If removing the week makes the whole object empty
              if (Object.keys(rest).length === 0) {
                  console.log("Weekly recipes object is now completely empty after clearing week.");
-                return {}; // Reset to empty object
+                return {};
              }
              console.log("Remaining weeks after clearing:", Object.keys(rest));
             return rest;
         });
-        setNutritionalAnalysis(null); // Clear analysis as well
-        setEstimatedPrice(0); // Reset price to 0 when all recipes are removed for the week
-        setIsClearWeekDialogOpen(false); // Close dialog
+        setNutritionalAnalysis(null);
+        setEstimatedPrice(0);
+        setIsClearWeekDialogOpen(false);
         toast({
             title: "本周已清空",
             description: `从 ${isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有餐点都已被移除。`,
             variant: "destructive",
         });
-   }, [currentWeekStartDate, toast, isClient]); // Add dependencies
+   }, [currentWeekStartDate, toast, isClient]);
 
-  // --- Preferences ---
   const handleUpdatePreferences = (data: UserPreferences) => {
     if (!isClient) return;
      console.log("handleUpdatePreferences called with data:", data);
@@ -482,7 +445,6 @@ export default function Home() {
     });
   };
 
-  // --- AI Features ---
   const triggerAnalysis = useCallback(async () => {
     if (!isClient) return;
     console.log("triggerAnalysis called.");
@@ -496,7 +458,6 @@ export default function Home() {
       return;
     }
 
-    // Ensure all recipes have ingredients for analysis
     const recipesWithIngredients = currentWeekRecipes.filter(r => r.ingredients && r.ingredients.length > 0 && r.ingredients.some(i => i.quantity > 0));
     if (recipesWithIngredients.length === 0) {
         console.log("Analysis trigger failed: No recipes have ingredients with quantity > 0.");
@@ -512,26 +473,24 @@ export default function Home() {
         toast({
             title: "部分分析",
             description: "一些没有成分（或数量为零）的餐点将从分析中排除。",
-            variant: "default", // Use default variant for informational messages
+            variant: "default",
         });
     }
 
 
     setIsLoadingAnalysis(true);
-    setNutritionalAnalysis(null); // Clear previous analysis
+    setNutritionalAnalysis(null);
 
     try {
-       // Prepare input for the AI flow
        const analysisInput: AnalyzeNutritionalBalanceInput = {
          recipes: recipesWithIngredients.map(r => ({
-           name: `${r.name} (${r.dayOfWeek} ${r.mealType})`, // Add context to name
+           name: `${r.name} (${r.dayOfWeek} ${r.mealType})`,
            ingredients: r.ingredients
-                        .filter(i => i.name && i.quantity > 0) // Ensure valid ingredients
+                        .filter(i => i.name && i.quantity > 0)
                         .map(i => ({ name: i.name, quantity: i.quantity })),
-         })).filter(r => r.ingredients.length > 0), // Ensure recipe has valid ingredients after filtering
+         })).filter(r => r.ingredients.length > 0),
        };
 
-       // Check if there are still recipes to analyze after filtering
        if (analysisInput.recipes.length === 0) {
            console.log("Analysis trigger failed: No recipes remaining after filtering for valid ingredients.");
            toast({
@@ -559,14 +518,12 @@ export default function Home() {
        });
     } catch (error) {
        console.error("在 triggerAnalysis 调用 analyzeNutritionalBalance 时出错:", error);
-        // Error messages are now translated in the flow itself
         const errorMessage = error instanceof Error ? error.message : "分析期间发生未知错误。";
 
        toast({
          title: "分析失败",
          description: (
              <>
-                {/* Check for API key error using the translated message */}
                 {errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误") ? (
                     <>
                         <AlertTriangle className="inline h-4 w-4 mr-1" />
@@ -581,12 +538,12 @@ export default function Home() {
          variant: "destructive",
          duration: 8000,
        });
-        setNutritionalAnalysis(null); // Ensure it stays null on error
+        setNutritionalAnalysis(null);
     } finally {
         console.log("Analysis process finished.");
        setIsLoadingAnalysis(false);
     }
-  }, [currentWeekRecipes, toast, isClient]); // Added toast dependency
+  }, [currentWeekRecipes, toast, isClient]);
 
 
   const triggerWeeklyGeneration = useCallback(async () => {
@@ -596,31 +553,25 @@ export default function Home() {
 
     let previousWeekRecipesString: string | undefined = undefined;
     try {
-        // Find previous week's recipes
         const previousWeekStartDate = getWeekStartDate(subWeeks(parseISO(currentWeekStartDate), 1));
         const previousWeekRecipes = weeklyRecipes[previousWeekStartDate] || [];
         console.log(`Found ${previousWeekRecipes.length} recipes from previous week (${previousWeekStartDate})`);
         previousWeekRecipesString = previousWeekRecipes.length > 0
             ? previousWeekRecipes.map(recipe =>
-                 // Use the Chinese display name format for the prompt
                  `日期: ${recipe.dayOfWeek}, 餐别: ${recipe.mealType}, 食谱: ${recipe.name}\n${recipe.ingredients && recipe.ingredients.length > 0 ? `成分:\n${recipe.ingredients.filter(i=>i.name && i.quantity>0).map(ing => `- ${ing.name} (${ing.quantity}克)`).join('\n')}` : '(未列出成分)'}`
                ).join('\n\n')
-            : undefined; // Pass undefined if no recipes last week
+            : undefined;
         console.log("Previous week recipes string (for prompt):", previousWeekRecipesString);
     } catch (error) {
         console.error("处理上周食谱时出错:", error);
-        // Decide if you want to proceed without previous week context or show an error
-        // toast({ title: "警告", description: "无法处理上周的食谱。", variant: "default" });
     }
 
     let existingCurrentWeekRecipesString: string | undefined = undefined;
     try {
-        // Get existing recipes for the current week
         const existingRecipes = weeklyRecipes[currentWeekStartDate] || [];
         console.log(`Found ${existingRecipes.length} existing recipes for current week (${currentWeekStartDate})`);
         existingCurrentWeekRecipesString = existingRecipes.length > 0
             ? existingRecipes.map(recipe =>
-                // Use the Chinese display name format for the prompt
                 `日期: ${recipe.dayOfWeek}, 餐别: ${recipe.mealType}, 食谱: ${recipe.name}`
               ).join('\n')
             : undefined;
@@ -635,8 +586,7 @@ export default function Home() {
          dietaryNeeds: userPreferences.dietaryNeeds || "未指定",
          preferences: userPreferences.preferences || "未指定",
          previousWeekRecipes: previousWeekRecipesString,
-         existingCurrentWeekRecipes: existingCurrentWeekRecipesString, // Add existing recipes
-         // numberOfSuggestions removed as prompt now aims for 21
+         existingCurrentWeekRecipes: existingCurrentWeekRecipesString,
        };
 
        console.log("调用 generateWeeklyRecipes 流程，输入：", JSON.stringify(generationInput, null, 2));
@@ -649,19 +599,17 @@ export default function Home() {
        }
 
 
-      // Add generated recipes to the current week's plan
       if (result.suggestedRecipes.length > 0) {
          console.log(`Received ${result.suggestedRecipes.length} generated recipes. Estimating nutrition...`);
          const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe, index) => {
            const recipeId = `recipe-gen-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 
-            // Translate English day/meal from AI to Chinese for storage and display
-           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0]; // Default to 周一 if map fails
-           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0]; // Default to 早餐 if map fails
+           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0];
+           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0];
 
-           // Validate against allowed Chinese values
-           const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[0];
-           const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[0];
+           const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[index % daysOfWeek.length]; // Distribute across days
+           const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[Math.floor(index / daysOfWeek.length) % mealTypes.length]; // Distribute across meal types
+
 
             if (!daysOfWeek.includes(displayDay) || !mealTypes.includes(displayMeal)) {
                 console.warn(`Generated recipe "${genRecipe.name}" has invalid day/meal: ${genRecipe.dayOfWeek}/${genRecipe.mealType}. Defaulting to ${validDay}/${validMeal}`);
@@ -671,38 +619,27 @@ export default function Home() {
              id: recipeId,
              name: genRecipe.name || "生成的餐点",
              description: genRecipe.description || "AI 建议的餐点。",
-             // Use ingredients from the AI response, ensuring they have valid structure and assign IDs
              ingredients: (genRecipe.ingredients || [])
                             .filter(ing => ing.name && ing.quantity > 0)
                             .map((ing, ingIndex) => ({
                                 id: `ingredient-gen-${recipeId}-${ingIndex}`,
                                 name: ing.name,
-                                quantity: Number(ing.quantity) || 0, // Ensure quantity is number
+                                quantity: Number(ing.quantity) || 0,
                             })),
              weekStartDate: currentWeekStartDate,
-             // Store the validated CHINESE names
              dayOfWeek: validDay,
              mealType: validMeal,
-             calories: undefined, // Initialize nutrition fields
+             calories: undefined,
              protein: undefined,
              fat: undefined,
              carbohydrates: undefined,
            };
 
-           // Now, estimate nutrition using the generated ingredients
            if (recipe.ingredients.length > 0) {
                try {
-                   // console.log(`正在为生成的餐点估算营养：${recipe.name}`); // Verbose
                    recipe = await estimateRecipeNutrition(recipe);
-                   // console.log(`为生成的 ${recipe.name} 估算的营养:`, {calories: recipe.calories, protein: recipe.protein, fat: recipe.fat, carbs: recipe.carbohydrates}); // Verbose
                } catch (error) {
                    console.error(`为生成的餐点 "${recipe.name}" 估算营养时出错：`, error);
-                   // Don't toast for every single one, maybe aggregate? For now, just log.
-                   // toast({
-                   //     title: "营养估算失败",
-                   //     description: `无法为生成的餐点估算营养：${recipe.name}。`,
-                   //     variant: "destructive",
-                   // });
                }
            } else {
               console.log(`生成的食谱 "${recipe.name}" 没有有效成分，跳过营养估算。`);
@@ -716,8 +653,6 @@ export default function Home() {
 
           setWeeklyRecipes((prevWeekly) => {
              console.log(`Adding ${generatedToAdd.length} generated recipes to week:`, currentWeekStartDate);
-             // Make sure to replace existing meals for the same day/slot if needed, or just add
-             // For simplicity, this adds to the existing list. Consider replacing logic if needed.
              const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
              const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
              console.log("New weeklyRecipes state after generation:", newState);
@@ -727,9 +662,8 @@ export default function Home() {
            toast({
               title: "食谱已生成并添加",
               description: `已添加 ${generatedToAdd.length} 个新的餐点建议，并估算了营养。您可以进一步编辑它们。`,
-              duration: 5000, // Longer duration
+              duration: 5000,
            });
-           // Also show any notes from the generation
            if (result.notes) {
                console.log("Generation notes:", result.notes);
               toast({
@@ -738,9 +672,8 @@ export default function Home() {
                  duration: 6000,
               });
            }
-           // Clear analysis after generating new meals
            setNutritionalAnalysis(null);
-           setEstimatedPrice(null); // Clear price when new meals are generated
+           setEstimatedPrice(null);
       } else {
            console.log("AI generation returned 0 suggested recipes.");
            toast({
@@ -751,10 +684,9 @@ export default function Home() {
 
     } catch (error) {
        console.error("在 triggerWeeklyGeneration 调用 generateWeeklyRecipes 时出错:", error);
-       // Error messages are translated in the flow itself
        const errorMessage = error instanceof Error ? error.message : "食谱生成期间发生未知错误。";
         const isApiKeyError = errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误");
-        const isSchemaError = errorMessage.includes("模式验证错误") || errorMessage.includes("AI 返回的数据格式无效");
+        const isSchemaError = errorMessage.includes("模式验证失败") || errorMessage.includes("AI 返回的数据格式无效");
 
 
        toast({
@@ -769,7 +701,7 @@ export default function Home() {
                ) : isSchemaError ? (
                    <>
                        <AlertTriangle className="inline h-4 w-4 mr-1" />
-                       {errorMessage} {/* Display translated schema error */}
+                       {errorMessage}
                    </>
                ) : (
                   errorMessage
@@ -784,18 +716,16 @@ export default function Home() {
        console.log("Weekly generation process finished.");
       setIsLoadingGeneration(false);
     }
-  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast, isClient]); // Added toast dependency
+  }, [currentWeekStartDate, userPreferences, weeklyRecipes, toast, isClient]);
 
 
-  // Log when the component is about to render the main structure
    console.log("Rendering Home component structure. isClient:", isClient);
 
 
   return (
     <main className="container mx-auto p-4 md:p-8 flex flex-col items-center min-h-screen bg-background">
        <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
-          {/* Header and Week Navigation */}
-          <div className="flex items-center justify-center mb-6 w-full max-w-7xl"> {/* Increased max-width */}
+          <div className="flex items-center justify-center mb-6 w-full max-w-7xl">
             <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
                <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -811,38 +741,34 @@ export default function Home() {
           </div>
         </ClientErrorBoundary>
 
-      {/* Main Content Area */}
-      <div className="w-full max-w-7xl space-y-8"> {/* Increased max-width */}
+      <div className="w-full max-w-7xl space-y-8">
          <ClientErrorBoundary fallback={<p className="text-red-500">周计划表加载失败。</p>}>
-            {/* Weekly Planner Table */}
              {isClient ? (
                 <WeeklyPlanner
                     recipes={currentWeekRecipes}
                     onDeleteRecipe={handleDeleteRecipe}
                     daysOfWeek={daysOfWeek}
                     mealTypes={mealTypes}
-                    deleteLabel="删除 (Delete)"
-                    detailsLabel="详细信息 (Details)"
-                    emptyLabel="空 (Empty)"
-                    nutritionLabel="营养 (Nutrition)"
-                    ingredientsLabel="成分 (Ingredients)"
-                    descriptionLabel="描述 (Description)"
-                    caloriesLabel="卡路里 (Calories)"
-                    proteinLabel="蛋白质 (Protein)"
-                    fatLabel="脂肪 (Fat)"
-                    carbsLabel="碳水化合物 (Carbs)"
+                    deleteLabel="删除"
+                    detailsLabel="详细信息"
+                    emptyLabel="空"
+                    nutritionLabel="营养"
+                    ingredientsLabel="成分"
+                    descriptionLabel="描述"
+                    caloriesLabel="卡路里"
+                    proteinLabel="蛋白质"
+                    fatLabel="脂肪"
+                    carbsLabel="碳水化合物"
                 />
              ) : (
                 <div className="w-full h-64 bg-muted rounded-md animate-pulse flex items-center justify-center">
                     加载计划表...
-                </div> // Placeholder while client loads
+                </div>
              )}
          </ClientErrorBoundary>
 
          <ClientErrorBoundary fallback={<p className="text-red-500">操作按钮加载失败。</p>}>
-            {/* Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                 {/* Add Meal Dialog */}
                  <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
                    <DialogTrigger asChild>
                       <Button variant="outline" className="w-full justify-center" disabled={!isClient}>
@@ -857,9 +783,9 @@ export default function Home() {
                           <RecipeInputForm
                             onAddRecipe={handleAddRecipe}
                             currentWeekStartDate={currentWeekStartDate}
-                            daysOfWeek={daysOfWeek} // Pass translated days
-                            mealTypes={mealTypes} // Pass translated meal types
-                            addMealTitle="添加餐点，为" // Translate prop
+                            daysOfWeek={daysOfWeek}
+                            mealTypes={mealTypes}
+                            addMealTitle="添加餐点，为"
                             recipeNameLabel="食谱/餐点名称 *"
                             recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
                             dayOfWeekLabel="星期 *"
@@ -873,12 +799,12 @@ export default function Home() {
                             quantityPlaceholder="数量 (克)"
                             addIngredientLabel="添加成分行"
                             submitButtonLabel="将餐点添加到本周"
+                            autoFillDetailsLabel="智能填充详情"
                           />
                         </ClientErrorBoundary>
                     </DialogContent>
                   </Dialog>
 
-                  {/* Analyze Nutrition Button */}
                   <Button
                      onClick={triggerAnalysis}
                      disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
@@ -888,7 +814,6 @@ export default function Home() {
                      分析营养
                   </Button>
 
-                  {/* Generate Meal Ideas Button */}
                    <Button
                      onClick={triggerWeeklyGeneration}
                      disabled={!isClient || isLoadingGeneration}
@@ -898,13 +823,12 @@ export default function Home() {
                      生成餐点建议
                    </Button>
 
-                    {/* Remove All Recipes Button */}
                     <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
                       <AlertDialogTrigger asChild>
                          <Button
                            variant="destructive"
                            className="w-full justify-center"
-                           disabled={!isClient || currentWeekRecipes.length === 0} // Disable if no recipes to remove
+                           disabled={!isClient || currentWeekRecipes.length === 0}
                           >
                             <Trash2 className="mr-2 h-4 w-4" /> 移除所有餐点
                          </Button>
@@ -918,7 +842,6 @@ export default function Home() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>取消</AlertDialogCancel>
-                          {/* Confirmation action calls the handler */}
                           <AlertDialogAction onClick={handleRemoveAllRecipes}>
                              继续
                           </AlertDialogAction>
@@ -929,27 +852,25 @@ export default function Home() {
            </ClientErrorBoundary>
 
 
-        {/* Collapsible Sections for Analysis and Preferences */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
            <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
-               {/* Nutritional Analysis */}
                {isClient ? (
                     <NutritionalAnalysis
                        analysis={nutritionalAnalysis}
                        isLoading={isLoadingAnalysis}
                        weekStartDate={currentWeekStartDate}
-                       title="每周营养分析" // Translate prop
-                       descriptionPrefix="从" // Translate prop
-                       descriptionSuffix="开始的一周的见解（基于带成分的餐点）" // Translate prop
-                       overallBalanceLabel="整体平衡" // Translate prop
-                       macroRatioLabel="宏量营养素比例" // Translate prop
-                       suggestionsLabel="改进建议" // Translate prop
-                       breakdownLabel="已分析餐点细分" // Translate prop
-                       noAnalysisTitle="营养分析" // Translate prop
-                       noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。" // Translate prop
-                       noAnalysisData="无可用分析数据。" // Translate prop
-                       analysisFailed="无法生成营养见解。" // Translate prop
-                       noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。" // Translate prop
+                       title="每周营养分析"
+                       descriptionPrefix="从"
+                       descriptionSuffix="开始的一周的见解（基于带成分的餐点）"
+                       overallBalanceLabel="整体平衡"
+                       macroRatioLabel="宏量营养素比例"
+                       suggestionsLabel="改进建议"
+                       breakdownLabel="已分析餐点细分"
+                       noAnalysisTitle="营养分析"
+                       noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。"
+                       noAnalysisData="无可用分析数据。"
+                       analysisFailed="无法生成营养见解。"
+                       noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。"
                     />
                 ) : (
                      <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
@@ -959,18 +880,17 @@ export default function Home() {
             </ClientErrorBoundary>
 
            <ClientErrorBoundary fallback={<p className="text-red-500">偏好表单加载失败。</p>}>
-               {/* Preferences Form */}
                {isClient ? (
                     <PreferencesForm
                       onSubmitPreferences={handleUpdatePreferences}
                       defaultValues={userPreferences}
-                      title="您的偏好" // Translate prop
-                      description="帮助我们推荐您会喜欢的食谱。" // Translate prop
-                      dietaryNeedsLabel="饮食需求" // Translate prop
-                      dietaryNeedsPlaceholder="例如，素食，无麸质，低碳水" // Translate prop
-                      preferencesLabel="食物偏好" // Translate prop
-                      preferencesPlaceholder="例如，喜欢辣的食物，偏爱中餐，不喜欢蘑菇" // Translate prop
-                      submitButtonLabel="更新偏好" // Translate prop
+                      title="您的偏好"
+                      description="帮助我们推荐您会喜欢的食谱。"
+                      dietaryNeedsLabel="饮食需求"
+                      dietaryNeedsPlaceholder="例如，素食，无麸质，低碳水"
+                      preferencesLabel="食物偏好"
+                      preferencesPlaceholder="例如，喜欢辣的食物，偏爱中餐，不喜欢蘑菇"
+                      submitButtonLabel="更新偏好"
                      />
                 ) : (
                      <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
@@ -981,7 +901,6 @@ export default function Home() {
         </div>
 
          <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
-            {/* Weekly Summary and Price Estimation */}
             {isClient && (
                 <WeeklySummary
                     aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
@@ -995,7 +914,7 @@ export default function Home() {
                     priceLoadingMessage="正在估算价格..."
                     priceErrorMessage="无法估算价格。"
                     quantityLabel="克"
-                    currencySymbol="¥" // Chinese Yuan symbol
+                    currencySymbol="¥"
                 />
             )}
          </ClientErrorBoundary>
@@ -1004,3 +923,4 @@ export default function Home() {
     </main>
   );
 }
+
