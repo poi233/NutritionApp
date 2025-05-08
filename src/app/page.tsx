@@ -34,8 +34,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog"; // Import the missing trigger
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -601,15 +601,17 @@ function HomePageContent() {
          const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe, index) => {
            const recipeId = `recipe-gen-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 
-           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0];
-           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0];
+           // Use the English day/meal from the response and map it back correctly
+           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0]; // Fallback just in case
+           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0]; // Fallback just in case
 
+           // Validate the generated day and meal against our allowed values
            const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[index % daysOfWeek.length];
            const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[Math.floor(index / daysOfWeek.length) % mealTypes.length];
 
 
             if (!daysOfWeek.includes(displayDay) || !mealTypes.includes(displayMeal)) {
-                console.warn(`Generated recipe "${genRecipe.name}" has invalid day/meal: ${genRecipe.dayOfWeek}/${genRecipe.mealType}. Defaulting to ${validDay}/${validMeal}`);
+                console.warn(`Generated recipe "${genRecipe.name}" has invalid day/meal: ${genRecipe.dayOfWeek}/${genRecipe.mealType}. Mapped to: ${displayDay}/${displayMeal}. Defaulting to ${validDay}/${validMeal}`);
             }
 
            let recipe: Recipe = {
@@ -624,8 +626,8 @@ function HomePageContent() {
                                 quantity: Number(ing.quantity) || 0,
                             })),
              weekStartDate: currentWeekStartDate,
-             dayOfWeek: validDay,
-             mealType: validMeal,
+             dayOfWeek: validDay, // Use the validated day
+             mealType: validMeal, // Use the validated meal
              calories: undefined,
              protein: undefined,
              fat: undefined,
@@ -931,7 +933,8 @@ function HomePageContent() {
 
       {/* Main Content Area */}
       <SidebarInset>
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+         {/* Reduce max-width and add horizontal padding */}
+        <main className="flex-1 p-4 md:px-6 lg:px-8 max-w-6xl mx-auto overflow-y-auto"> {/* Adjusted max-width and padding */}
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
               {/* Header Section with Sidebar Trigger */}
               <div className="flex items-center justify-center mb-6 w-full relative"> {/* Added relative positioning */}
@@ -1026,3 +1029,4 @@ export default function Home() {
     </SidebarProvider>
   );
 }
+
