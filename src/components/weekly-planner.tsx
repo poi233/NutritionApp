@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { FC } from "react";
@@ -82,19 +83,16 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
               const slotRecipes = getRecipesForSlot(day, meal);
               const totalRecipesInSlot = slotRecipes.length;
               return (
-                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[80px] relative"> {/* Use relative positioning for potential absolute stacking */}
-                  <div className="space-y-0"> {/* Remove vertical space for stacking */}
+                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[80px]"> {/* Removed relative positioning */}
+                  {/* Use simple vertical spacing instead of negative margin stacking */}
+                  <div className="space-y-1">
                      {totalRecipesInSlot > 0 ? (
                        slotRecipes.map((recipe, index) => (
                           <Card
                             key={recipe.id}
                             className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 w-full overflow-hidden min-h-[36px]" // Reduced min-h, width is full cell width
-                            // Apply negative margin for stacking effect (only if more than 1 recipe)
-                            // Limit stacking visualization to MAX_VISIBLE_STACKED_CARDS
-                            style={totalRecipesInSlot > 1 && index > 0 && index < MAX_VISIBLE_STACKED_CARDS ? { marginTop: '-24px', zIndex: index } : {zIndex: index}}
+                            // Removed style applying negative margin and zIndex
                           >
-                             {/* Only show footer if NOT stacked or if it's the last visible stacked card */}
-                             {/* We always show the header */}
                             <CardHeader className="flex flex-row items-center justify-between p-1.5 pb-1 flex-shrink-0"> {/* Reduced padding */}
                               <CardTitle className="text-[10px] font-medium leading-tight flex-1 mr-1 truncate" title={recipe.name}>
                                  {/* Add a number prefix if multiple recipes */}
@@ -144,18 +142,17 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                 </Button>
                               </div>
                             </CardHeader>
-                            {/* Conditionally render footer for non-stacked or last item */}
-                            {(totalRecipesInSlot === 1 || index === totalRecipesInSlot - 1 || index === MAX_VISIBLE_STACKED_CARDS - 1) && recipe.calories !== undefined && (
+                            {recipe.calories !== undefined && (
                                <CardFooter className="p-1.5 pt-0 mt-auto flex-shrink-0">
                                   <p className="text-[9px] text-muted-foreground">{recipe.calories?.toFixed(0)} {caloriesLabel} (估算)</p> {/* Even smaller text */}
                                </CardFooter>
                              )}
-                             {/* Show indicator if there are more hidden stacked cards */}
-                            {index === MAX_VISIBLE_STACKED_CARDS - 1 && totalRecipesInSlot > MAX_VISIBLE_STACKED_CARDS && (
+                             {/* Show indicator if there are more hidden stacked cards - Removed as we are no longer stacking */}
+                            {/* {index === MAX_VISIBLE_STACKED_CARDS - 1 && totalRecipesInSlot > MAX_VISIBLE_STACKED_CARDS && (
                                 <div className="text-center text-[9px] text-muted-foreground bg-gradient-to-t from-background/80 via-background/80 to-transparent pt-1 pb-0.5 -mt-1">
                                     + {totalRecipesInSlot - MAX_VISIBLE_STACKED_CARDS} more...
                                 </div>
-                            )}
+                            )} */}
                           </Card>
                         ))
                      ) : (
@@ -173,3 +170,4 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
+
