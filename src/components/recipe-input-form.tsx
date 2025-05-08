@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { PlusCircle, Trash2, Sparkles, RefreshCw } from 'lucide-react'; // Added Sparkles and RefreshCw
+import { PlusCircle, Trash2, Sparkles, RefreshCw, XCircle } from 'lucide-react'; // Added Sparkles, RefreshCw, XCircle
 import type { Recipe, Ingredient } from "@/types/recipe";
 import { format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -46,6 +46,7 @@ type HookFormShape = z.infer<typeof recipeFormSchema>;
 
 interface RecipeInputFormProps {
   onAddRecipe: (recipe: RecipeFormData) => void;
+  onCloseDialog: () => void; // New prop to handle closing
   currentWeekStartDate: string;
   daysOfWeek: string[];
   mealTypes: string[];
@@ -68,6 +69,7 @@ interface RecipeInputFormProps {
 
 export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     onAddRecipe,
+    onCloseDialog, // Destructure the new prop
     currentWeekStartDate,
     daysOfWeek,
     mealTypes,
@@ -128,8 +130,8 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
         quantity: ing.quantity,
       })),
     };
-    onAddRecipe(newRecipeData);
-    reset();
+    onAddRecipe(newRecipeData); // This now only adds the recipe and shows a toast
+    reset(); // Clear the form for the next entry
   };
 
   const handleAddNewIngredient = () => {
@@ -333,7 +335,12 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
           </Button>
         </form>
       </CardContent>
-       <CardFooter className="flex justify-end pt-4 p-0">
+       <CardFooter className="flex justify-between pt-4 p-0">
+           {/* Added Close button */}
+           <Button type="button" variant="outline" onClick={onCloseDialog}>
+             <XCircle className="mr-2 h-4 w-4" />
+              关闭
+           </Button>
            <Button type="submit" form="recipe-form" className="bg-primary text-primary-foreground hover:bg-primary/90">
              {submitButtonLabel}
           </Button>
@@ -341,3 +348,4 @@ export const RecipeInputForm: FC<RecipeInputFormProps> = ({
     </Card>
   );
 };
+

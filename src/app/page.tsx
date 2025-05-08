@@ -34,7 +34,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added missing import
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -369,10 +369,11 @@ function HomePageContent() {
 
      setNutritionalAnalysis(null);
      setEstimatedPrice(null);
-     setIsAddRecipeDialogOpen(false);
+     // Do NOT close the dialog here anymore
+    // setIsAddRecipeDialogOpen(false);
     toast({
       title: "餐点已添加",
-      description: `${newRecipe.dayOfWeek} ${newRecipe.mealType} 的 ${newRecipe.name} 已添加。`,
+      description: `${newRecipe.dayOfWeek} ${newRecipe.mealType} 的 ${newRecipe.name} 已添加。您可以继续添加或关闭窗口。`,
     });
   }, [currentWeekStartDate, toast, isClient]);
 
@@ -649,6 +650,7 @@ function HomePageContent() {
 
           setWeeklyRecipes((prevWeekly) => {
              console.log(`Adding ${generatedToAdd.length} generated recipes to week:`, currentWeekStartDate);
+             // Add generated recipes, potentially creating duplicates for a slot
              const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
              const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
              console.log("New weeklyRecipes state after generation:", newState);
@@ -768,9 +770,11 @@ function HomePageContent() {
                     <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>添加新餐点</DialogTitle>
+                        <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
                       </DialogHeader>
                       <RecipeInputForm
                         onAddRecipe={handleAddRecipe}
+                        onCloseDialog={() => setIsAddRecipeDialogOpen(false)} // Pass the close handler
                         currentWeekStartDate={currentWeekStartDate}
                         daysOfWeek={daysOfWeek}
                         mealTypes={mealTypes}
@@ -787,7 +791,7 @@ function HomePageContent() {
                         ingredientNamePlaceholder="成分名称"
                         quantityPlaceholder="数量 (克)"
                         addIngredientLabel="添加成分行"
-                        submitButtonLabel="将餐点添加到本周"
+                        submitButtonLabel="添加餐点"
                         autoFillDetailsLabel="智能填充详情"
                       />
                     </DialogContent>
@@ -1012,5 +1016,4 @@ export default function Home() {
     </SidebarProvider>
   );
 }
-
 
