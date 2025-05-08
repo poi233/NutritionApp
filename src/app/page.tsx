@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -33,7 +34,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
+    AlertDialogTrigger, // Added missing import
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,10 +156,10 @@ function HomePageContent() {
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(() => getWeekStartDate(new Date()));
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
-  const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
-  
+  // Removed userPreferences state as it's now handled in the dialog
+
   const [isGeneratePreferencesDialogOpen, setIsGeneratePreferencesDialogOpen] = useState(false);
-  const [generateDialogPreferences, setGenerateDialogPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "" });
+  const [generateDialogPreferences, setGenerateDialogPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" }); // Default preference remains
 
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
@@ -243,7 +244,7 @@ function HomePageContent() {
         console.log("Attempting to load data from localStorage.");
        try {
          const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
-         const storedPreferences = localStorage.getItem("nutrijournal_preferences");
+         // Removed loading preferences from local storage
          if (storedWeeklyRecipes) {
             const parsedRecipes = JSON.parse(storedWeeklyRecipes);
             console.log("Loaded weekly recipes from localStorage:", parsedRecipes);
@@ -252,21 +253,14 @@ function HomePageContent() {
              console.log("No weekly recipes found in localStorage.");
          }
 
-         const defaultPrefs = { dietaryNeeds: "", preferences: "中餐 (Chinese food)" };
-         if (storedPreferences) {
-             const parsedPrefs = JSON.parse(storedPreferences);
-             console.log("Loaded preferences from localStorage:", parsedPrefs);
-             setUserPreferences(parsedPrefs && typeof parsedPrefs === 'object' ? parsedPrefs : defaultPrefs);
-         } else {
-            console.log("No preferences found in localStorage, saving default.");
-            setUserPreferences(defaultPrefs);
-            localStorage.setItem("nutrijournal_preferences", JSON.stringify(defaultPrefs));
-         }
+         // Set initial dialog preferences (can be default or loaded if needed later)
+          setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
+
        } catch (error) {
          console.error("从 localStorage 加载数据时出错:", error);
          toast({
            title: "加载数据出错",
-           description: "无法加载已保存的计划或偏好。",
+           description: "无法加载已保存的计划。", // Updated message
            variant: "destructive",
          });
        }
@@ -291,17 +285,7 @@ function HomePageContent() {
      }
   }, [weeklyRecipes, isClient]);
 
-   useEffect(() => {
-     if (isClient) {
-        console.log("User preferences changed, attempting to save to localStorage:", userPreferences);
-        try {
-             localStorage.setItem("nutrijournal_preferences", JSON.stringify(userPreferences));
-             console.log("Saved preferences to localStorage.");
-        } catch (error) {
-             console.error("将偏好保存到 localStorage 时出错:", error);
-        }
-     }
-   }, [userPreferences, isClient]);
+   // Removed useEffect for saving userPreferences to localStorage
 
    useEffect(() => {
       console.log("Current week changed to:", currentWeekStartDate, "Clearing nutritional analysis and estimated price.");
@@ -455,15 +439,7 @@ function HomePageContent() {
         });
    }, [currentWeekStartDate, toast, isClient]);
 
-  const handleUpdateAndSavePreferences = (data: UserPreferences) => {
-    if (!isClient) return;
-    console.log("handleUpdateAndSavePreferences called with data:", data);
-    setUserPreferences(data); 
-    toast({
-      title: "偏好已更新",
-      description: "您的饮食需求和偏好已（临时）更新用于本次生成。",
-    });
-  };
+  // Removed handleUpdateAndSavePreferences as preferences are now temporary
 
   const triggerAnalysis = useCallback(async () => {
     if (!isClient) return;
@@ -544,7 +520,7 @@ function HomePageContent() {
          title: "分析失败",
          description: (
              <>
-                {errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误") ? (
+                {errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误") || errorMessage.includes("API Key issue") ? (
                     <>
                         <AlertTriangle className="inline h-4 w-4 mr-1" />
                          API 密钥错误。请检查 `.env` 中的 GOOGLE_API_KEY 并重启服务器。
@@ -603,8 +579,8 @@ function HomePageContent() {
     try {
        const generationInput: GenerateWeeklyRecipesInput = {
          weekStartDate: currentWeekStartDate,
-         dietaryNeeds: prefs.dietaryNeeds || "未指定", 
-         preferences: prefs.preferences || "未指定", 
+         dietaryNeeds: prefs.dietaryNeeds || "未指定",
+         preferences: prefs.preferences || "未指定",
          previousWeekRecipes: previousWeekRecipesString,
          existingCurrentWeekRecipes: existingCurrentWeekRecipesString,
        };
@@ -627,7 +603,7 @@ function HomePageContent() {
            const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0];
            const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0];
 
-           const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[index % daysOfWeek.length]; 
+           const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[index % daysOfWeek.length];
            const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[Math.floor(index / daysOfWeek.length) % mealTypes.length];
 
 
@@ -705,7 +681,7 @@ function HomePageContent() {
     } catch (error) {
        console.error("在 actualGenerateWeeklyRecipesLogic 调用 generateWeeklyRecipes 时出错:", error);
        const errorMessage = error instanceof Error ? error.message : "食谱生成期间发生未知错误。";
-        const isApiKeyError = errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误");
+        const isApiKeyError = errorMessage.includes("无效的 Google AI API 密钥") || errorMessage.includes("API 密钥错误") || errorMessage.includes("API Key issue");
         const isSchemaError = errorMessage.includes("模式验证失败") || errorMessage.includes("AI 返回的数据格式无效");
 
 
@@ -741,15 +717,21 @@ function HomePageContent() {
 
   const openGeneratePreferencesDialog = () => {
     if (!isClient) return;
-    setGenerateDialogPreferences(userPreferences); 
+    // Reset dialog preferences to default each time it opens
+    setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
     setIsGeneratePreferencesDialogOpen(true);
   };
 
   const handleGenerateWithPreferences = () => {
     if (!isClient) return;
-    handleUpdateAndSavePreferences(generateDialogPreferences); 
-    actualGenerateWeeklyRecipesLogic(generateDialogPreferences); 
+    // Use the temporary preferences from the dialog state
+    actualGenerateWeeklyRecipesLogic(generateDialogPreferences);
     setIsGeneratePreferencesDialogOpen(false);
+    // Do not save these preferences permanently
+    toast({
+        title: "正在生成食谱...",
+        description: "正在使用您输入的偏好生成餐点建议。",
+    });
   };
 
 
@@ -825,7 +807,7 @@ function HomePageContent() {
                  </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Generate Recipes Button */}
+              {/* Generate Recipes Button (opens preferences dialog) */}
               <SidebarMenuItem>
                  <SidebarMenuButton
                      onClick={openGeneratePreferencesDialog}
@@ -872,27 +854,30 @@ function HomePageContent() {
         </SidebarContent>
 
         <SidebarFooter>
-          <Separator className="my-2" />
-            <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
-                {isClient && (
-                    <WeeklySummary
-                        aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
-                        estimatedPrice={estimatedPrice}
-                        isLoadingPrice={isLoadingPrice}
-                        weekStartDate={currentWeekStartDate}
-                        title="本周食材汇总"
-                        totalEstimatedPriceLabel="预估总价"
-                        ingredientsListLabel="食材清单"
-                        noIngredientsMessage="本周计划中没有食材。"
-                        priceLoadingMessage="正在估算价格..."
-                        priceErrorMessage="无法估算价格。"
-                        quantityLabel="克"
-                        currencySymbol="¥"
-                        isCompact={sidebarState === 'collapsed'} // Use sidebar state
-                        isSidebarCollapsed={sidebarState === 'collapsed'} // Explicit prop for collapsed state styling
-                    />
-                )}
-            </ClientErrorBoundary>
+          {sidebarState !== 'collapsed' && (
+            <>
+              <Separator className="my-2" />
+              <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
+                  {isClient && (
+                      <WeeklySummary
+                          aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
+                          estimatedPrice={estimatedPrice}
+                          isLoadingPrice={isLoadingPrice}
+                          weekStartDate={currentWeekStartDate}
+                          title="本周食材汇总"
+                          totalEstimatedPriceLabel="预估总价"
+                          ingredientsListLabel="食材清单"
+                          noIngredientsMessage="本周计划中没有食材。"
+                          priceLoadingMessage="正在估算价格..."
+                          priceErrorMessage="无法估算价格。"
+                          quantityLabel="克"
+                          currencySymbol="¥"
+                          isSidebarCollapsed={sidebarState === 'collapsed'}
+                      />
+                  )}
+              </ClientErrorBoundary>
+            </>
+          )}
         </SidebarFooter>
       </Sidebar>
 
@@ -907,7 +892,7 @@ function HomePageContent() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div>
-                        <Label htmlFor="dialogDietaryNeeds" className="block text-sm font-medium mb-1">饮食需求</Label>
+                        <Label htmlFor="dialogDietaryNeeds" className="block text-sm font-medium mb-1">饮食需求 (可选)</Label>
                         <Textarea
                             id="dialogDietaryNeeds"
                             placeholder="例如，素食，无麸质，低碳水"
@@ -917,7 +902,7 @@ function HomePageContent() {
                         />
                     </div>
                     <div>
-                        <Label htmlFor="dialogPreferences" className="block text-sm font-medium mb-1">食物偏好</Label>
+                        <Label htmlFor="dialogPreferences" className="block text-sm font-medium mb-1">食物偏好 (可选)</Label>
                         <Textarea
                             id="dialogPreferences"
                             placeholder="例如，喜欢辣的食物，偏爱中餐，不喜欢蘑菇"
@@ -985,6 +970,8 @@ function HomePageContent() {
                 )}
               </ClientErrorBoundary>
 
+              {/* Removed User Preferences Section */}
+
               <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
                 {isClient ? (
                   <NutritionalAnalysis
@@ -1025,3 +1012,5 @@ export default function Home() {
     </SidebarProvider>
   );
 }
+
+
