@@ -7,11 +7,12 @@ import { RecipeInputForm, type RecipeFormData } from "@/components/recipe-input-
 import { WeeklyPlanner } from "@/components/weekly-planner";
 import { NutritionalAnalysis } from "@/components/nutritional-analysis";
 import { PreferencesForm } from "@/components/preferences-form";
+import { WeeklySummary } from "@/components/weekly-summary"; // Import WeeklySummary
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2 } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, ShoppingCart } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale'; // Import Chinese locale for date formatting
 import {
@@ -33,6 +34,8 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { getNutrition } from "@/services/nutrition"; // Import nutrition service
+import { estimateTotalPriceForIngredients, type AggregatedIngredient } from "@/services/pricing"; // Import pricing service
+
 
 // Basic Error Boundary for client-side component errors
 class ClientErrorBoundary extends React.Component<{ children: React.ReactNode, fallback?: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -147,6 +150,8 @@ export default function Home() {
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false); // State for price loading
+  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null); // State for estimated price
   const [isAddRecipeDialogOpen, setIsAddRecipeDialogOpen] = useState(false); // State for dialog
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false); // State for clear week confirmation
   const [isClient, setIsClient] = useState(false); // Track client-side rendering
@@ -172,6 +177,59 @@ export default function Home() {
         console.log(`Deriving currentWeekRecipes for ${currentWeekStartDate} (client-side): Found ${recipesForWeek.length} recipes.`);
       return recipesForWeek;
   }, [weeklyRecipes, currentWeekStartDate, isClient]);
+
+  // Aggregate ingredients for the current week
+  const aggregatedIngredientsForCurrentWeek = useMemo(() => {
+    if (!isClient || currentWeekRecipes.length === 0) {
+      return [];
+    }
+    const ingredientMap = new Map<string, number>();
+    currentWeekRecipes.forEach(recipe => {
+      if (recipe.ingredients) {
+        recipe.ingredients.forEach(ingredient => {
+          if (ingredient.name && ingredient.quantity > 0) {
+            const currentQuantity = ingredientMap.get(ingredient.name) || 0;
+            ingredientMap.set(ingredient.name, currentQuantity + ingredient.quantity);
+          }
+        });
+      }
+    });
+    return Array.from(ingredientMap.entries()).map(([name, totalQuantity]) => ({
+      name,
+      totalQuantity,
+    }));
+  }, [currentWeekRecipes, isClient]);
+
+  // Estimate total price for aggregated ingredients
+  useEffect(() => {
+    if (isClient && aggregatedIngredientsForCurrentWeek.length > 0) {
+      setIsLoadingPrice(true);
+      setEstimatedPrice(null); // Clear previous price
+      console.log("Estimating price for aggregated ingredients:", aggregatedIngredientsForCurrentWeek);
+      estimateTotalPriceForIngredients(aggregatedIngredientsForCurrentWeek)
+        .then(price => {
+          console.log("Estimated total price:", price);
+          setEstimatedPrice(price);
+        })
+        .catch(error => {
+          console.error("估算总价时出错:", error);
+          toast({
+            title: "价格估算失败",
+            description: "无法估算本周食材的总价。",
+            variant: "destructive",
+          });
+          setEstimatedPrice(null);
+        })
+        .finally(() => {
+          setIsLoadingPrice(false);
+        });
+    } else if (isClient && aggregatedIngredientsForCurrentWeek.length === 0) {
+        // If there are no ingredients, set price to 0 and don't show loading
+        setEstimatedPrice(0);
+        setIsLoadingPrice(false);
+    }
+  }, [aggregatedIngredientsForCurrentWeek, isClient, toast]);
+
 
   // Load data from localStorage on initial client-side render
    useEffect(() => {
@@ -249,10 +307,11 @@ export default function Home() {
      }
    }, [userPreferences, isClient]);
 
-   // Clear analysis when week changes
+   // Clear analysis and estimated price when week changes
    useEffect(() => {
-      console.log("Current week changed to:", currentWeekStartDate, "Clearing nutritional analysis.");
+      console.log("Current week changed to:", currentWeekStartDate, "Clearing nutritional analysis and estimated price.");
      setNutritionalAnalysis(null);
+     setEstimatedPrice(null); // Clear price when week changes
    }, [currentWeekStartDate]);
 
    // --- Week Navigation ---
@@ -335,6 +394,7 @@ export default function Home() {
     }));
 
      setNutritionalAnalysis(null); // Clear analysis when a recipe is added
+     setEstimatedPrice(null); // Clear price when a recipe is added
      setIsAddRecipeDialogOpen(false); // Close dialog
     toast({
       title: "餐点已添加",
@@ -380,6 +440,7 @@ export default function Home() {
      });
       // Clear previous analysis/recommendations when a recipe is deleted from the current week
      setNutritionalAnalysis(null);
+     setEstimatedPrice(null); // Clear price when a recipe is deleted
       toast({
         title: "餐点已移除",
         description: `"${deletedRecipeName}" 已从此周计划中移除。`,
@@ -401,6 +462,7 @@ export default function Home() {
             return rest;
         });
         setNutritionalAnalysis(null); // Clear analysis as well
+        setEstimatedPrice(0); // Reset price to 0 when all recipes are removed for the week
         setIsClearWeekDialogOpen(false); // Close dialog
         toast({
             title: "本周已清空",
@@ -678,6 +740,7 @@ export default function Home() {
            }
            // Clear analysis after generating new meals
            setNutritionalAnalysis(null);
+           setEstimatedPrice(null); // Clear price when new meals are generated
       } else {
            console.log("AI generation returned 0 suggested recipes.");
            toast({
@@ -917,9 +980,27 @@ export default function Home() {
             </ClientErrorBoundary>
         </div>
 
+         <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
+            {/* Weekly Summary and Price Estimation */}
+            {isClient && (
+                <WeeklySummary
+                    aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
+                    estimatedPrice={estimatedPrice}
+                    isLoadingPrice={isLoadingPrice}
+                    weekStartDate={currentWeekStartDate}
+                    title="本周食材汇总"
+                    totalEstimatedPriceLabel="预估总价"
+                    ingredientsListLabel="食材清单"
+                    noIngredientsMessage="本周计划中没有食材。"
+                    priceLoadingMessage="正在估算价格..."
+                    priceErrorMessage="无法估算价格。"
+                    quantityLabel="克"
+                    currencySymbol="¥" // Chinese Yuan symbol
+                />
+            )}
+         </ClientErrorBoundary>
+
       </div>
     </main>
   );
 }
-
-    
