@@ -1,4 +1,5 @@
-"use client"
+
+"use client" // Add use client directive
 
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
@@ -316,14 +317,19 @@ SidebarRail.displayName = "SidebarRail"
 
 const SidebarInset = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"main">
+  React.ComponentProps<"main"> // Changed from HTMLDivElement to main for semantic HTML
 >(({ className, ...props }, ref) => {
   return (
-    <main
+    <main // Use main tag
       ref={ref}
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background",
-        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+        // Adjustments for when the sidebar is collapsed/inset
+        "peer-data-[collapsible=icon]:peer-data-[side=left]:pl-[--sidebar-width-icon] peer-data-[collapsible=icon]:peer-data-[side=right]:pr-[--sidebar-width-icon]",
+        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+        // Specific adjustments for inset sidebar when collapsed
+        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:peer-data-[side=left]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]",
+        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:peer-data-[side=right]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]",
         className
       )}
       {...props}
@@ -373,7 +379,7 @@ const SidebarFooter = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2 mt-auto", className)} // Added mt-auto
       {...props}
     />
   )
@@ -519,6 +525,8 @@ const sidebarMenuButtonVariants = cva(
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 group-data-[active=true]:bg-destructive group-data-[active=true]:text-destructive-foreground", // Added destructive variant
       },
       size: {
         default: "h-8 text-sm",
