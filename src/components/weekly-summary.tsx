@@ -45,17 +45,17 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
   const categorizedIngredients = groupIngredientsByCategory(aggregatedIngredients);
 
   return (
-    <Card className="mt-8 shadow-md">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <ShoppingCart className="mr-2 h-5 w-5 text-primary" />
+    <Card className="shadow-md">
+      <CardHeader className="py-3 px-4">
+        <CardTitle className="flex items-center text-base">
+          <ShoppingCart className="mr-2 h-4 w-4 text-primary" />
           {title} - {weekDisplay}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           {totalEstimatedPriceLabel}:{" "}
           {isLoadingPrice ? (
             <span className="inline-flex items-center">
-              <RefreshCw className="mr-1 h-4 w-4 animate-spin" /> {priceLoadingMessage}
+              <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> {priceLoadingMessage}
             </span>
           ) : estimatedPrice !== null ? (
             <span className="font-semibold text-accent">
@@ -63,32 +63,31 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
             </span>
           ) : (
             <span className="inline-flex items-center text-destructive">
-              <AlertTriangle className="mr-1 h-4 w-4" /> {priceErrorMessage}
+              <AlertTriangle className="mr-1 h-3 w-3" /> {priceErrorMessage}
             </span>
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <h3 className="text-lg font-semibold mb-2">{ingredientsListLabel}</h3>
+      <CardContent className="pt-0 pb-3 px-4">
+        <h3 className="text-sm font-semibold mb-1">{ingredientsListLabel}</h3>
         {aggregatedIngredients.length > 0 ? (
-          <ScrollArea className="h-[300px] rounded-md border p-2"> {/* Increased height */}
+          <ScrollArea className="h-[200px] rounded-md border p-1">
             {INGREDIENT_CATEGORIES_ORDERED.map(category => {
               const itemsInCategory = categorizedIngredients[category];
               if (!itemsInCategory || itemsInCategory.length === 0) {
-                return null; // Don't render section if category is empty
+                return null;
               }
               return (
-                <div key={category} className="mb-4 last:mb-0">
-                  <h4 className="text-md font-semibold text-primary mb-1 sticky top-0 bg-background/95 p-1 z-10 -ml-1 -mr-1 pl-2 rounded-t-sm">
+                <div key={category} className="mb-2 last:mb-0">
+                  <h4 className="text-xs font-semibold text-primary mb-1 sticky top-0 bg-background/95 p-1 z-10 -ml-1 -mr-1 pl-2 rounded-t-sm">
                     {category}
                   </h4>
                   <Table className="mt-0">
-                    {/* No header per category to save space, header is implicit by category title */}
                     <TableBody>
                       {itemsInCategory.map((item, index) => (
                         <TableRow key={`${category}-${index}-${item.name}`}>
-                          <TableCell className="py-1 text-sm">{item.name}</TableCell>
-                          <TableCell className="text-right py-1 text-sm">{item.totalQuantity.toLocaleString()} {quantityLabel}</TableCell>
+                          <TableCell className="py-0.5 px-1 text-xs">{item.name}</TableCell>
+                          <TableCell className="text-right py-0.5 px-1 text-xs">{item.totalQuantity.toLocaleString()} {quantityLabel}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -98,10 +97,9 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
             })}
           </ScrollArea>
         ) : (
-          <p className="text-sm text-muted-foreground">{noIngredientsMessage}</p>
+          <p className="text-xs text-muted-foreground">{noIngredientsMessage}</p>
         )}
       </CardContent>
     </Card>
   );
 };
-
