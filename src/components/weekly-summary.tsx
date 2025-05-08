@@ -75,7 +75,7 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
       <CardContent className={cn("pt-0 pb-3 px-4", isCompact ? "p-0" : "")}>
         <h3 className={cn("text-sm font-semibold mb-1", isCompact ? "text-xs mt-1" : "")}>{ingredientsListLabel}</h3>
         {aggregatedIngredients.length > 0 ? (
-          <ScrollArea className={cn("rounded-md border p-1", isCompact ? "h-[120px] border-none p-0" : "h-[200px]")}>
+          <ScrollArea className={cn("rounded-md border p-1", isCompact ? "h-[250px] border-none p-0" : "h-[200px]")}> {/* Increased height for compact mode */}
             {INGREDIENT_CATEGORIES_ORDERED.map(category => {
               const itemsInCategory = categorizedIngredients[category];
               if (!itemsInCategory || itemsInCategory.length === 0) {
