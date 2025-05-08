@@ -59,7 +59,8 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
   };
 
   return (
-    <Table className="border shadow-md rounded-md overflow-hidden w-full table-fixed">
+    // Removed w-full to allow natural table width centering via parent mx-auto
+    <Table className="border shadow-md rounded-md overflow-hidden table-fixed">
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
            {/* Adjust widths to make table narrower */}
@@ -163,3 +164,4 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
+
