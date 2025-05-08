@@ -1,4 +1,5 @@
 
+
 "use client" // Add use client directive
 
 import * as React from "react"
@@ -169,7 +170,7 @@ const Sidebar = React.forwardRef<
     {
       side = "left",
       variant = "sidebar",
-      collapsible = "offcanvas",
+      collapsible = "icon", // Changed default to icon for better UX
       className,
       children,
       ...props
@@ -225,24 +226,34 @@ const Sidebar = React.forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
-            "duration-200 relative h-svh w-[--sidebar-width] bg-transparent transition-[width] ease-linear",
-            "group-data-[collapsible=offcanvas]:w-0",
+            "duration-200 relative h-svh bg-transparent transition-[width] ease-linear",
+            collapsible === 'icon' && state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]", // Dynamic width based on state
+            collapsible === 'offcanvas' ? "w-0" : "",
             "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]"
+             variant === "floating" || variant === "inset"
+               ? state === 'expanded'
+                 ? "w-[--sidebar-width]" // Expanded width for floating/inset
+                 : "w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" // Collapsed width for floating/inset
+               : state === 'expanded'
+                 ? "w-[--sidebar-width]" // Expanded width for default sidebar
+                 : "w-[--sidebar-width-icon]" // Collapsed width for default sidebar
           )}
         />
         <div
           className={cn(
-            "duration-200 fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] ease-linear md:flex",
+            "duration-200 fixed inset-y-0 z-10 hidden h-svh transition-[left,right,width] ease-linear md:flex",
+             collapsible === 'icon' && state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]", // Dynamic width based on state
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             // Adjust the padding for floating and inset variants.
-            variant === "floating" || variant === "inset"
-              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+             variant === "floating" || variant === "inset"
+               ? state === 'expanded'
+                 ? "p-2 w-[--sidebar-width]" // Expanded floating/inset
+                 : "p-2 w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]" // Collapsed floating/inset
+               : state === 'expanded'
+                 ? "w-[--sidebar-width] group-data-[side=left]:border-r group-data-[side=right]:border-l" // Expanded default
+                 : "w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l", // Collapsed default
             className
           )}
           {...props}
@@ -322,17 +333,20 @@ const SidebarInset = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"main"> // Changed from HTMLDivElement to main for semantic HTML
 >(({ className, ...props }, ref) => {
+  const { state, isMobile } = useSidebar(); // Get sidebar state and mobile status
+
   return (
     <main // Use main tag
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-background",
+        "relative flex min-h-svh flex-1 flex-col bg-background transition-[padding-left,padding-right] duration-200 ease-linear", // Added transition
         // Adjustments for when the sidebar is collapsed/inset
-        "peer-data-[collapsible=icon]:peer-data-[side=left]:pl-[--sidebar-width-icon] peer-data-[collapsible=icon]:peer-data-[side=right]:pr-[--sidebar-width-icon]",
+         !isMobile && state === 'expanded' ? "peer-data-[side=left]:pl-[--sidebar-width] peer-data-[side=right]:pr-[--sidebar-width]" : "", // Expanded padding
+         !isMobile && state === 'collapsed' ? "peer-data-[side=left]:pl-[--sidebar-width-icon] peer-data-[side=right]:pr-[--sidebar-width-icon]" : "", // Collapsed padding
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         // Specific adjustments for inset sidebar when collapsed
-        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:peer-data-[side=left]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]",
-        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:peer-data-[side=right]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]",
+         !isMobile && state === 'collapsed' ? "md:peer-data-[variant=inset]:peer-data-[side=left]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" : "",
+         !isMobile && state === 'collapsed' ? "md:peer-data-[variant=inset]:peer-data-[side=right]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" : "",
         className
       )}
       {...props}
@@ -773,4 +787,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-

@@ -48,7 +48,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarTrigger,
+  SidebarTrigger, // Import SidebarTrigger
   SidebarInset,
   SidebarMenu,
   SidebarMenuItem,
@@ -744,11 +744,11 @@ function HomePageContent() {
     <>
         <Sidebar variant="sidebar" collapsible="icon" side="left">
         <SidebarHeader>
-           <div className="flex items-center justify-between">
+           <div className="flex items-center justify-between w-full"> {/* Ensure header takes full width */}
             <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
               <Settings2 className="h-5 w-5" /> 操作面板
             </h2>
-            <SidebarTrigger className="ml-auto group-data-[collapsible=icon]:ml-0" />
+             {/* SidebarTrigger moved outside */}
            </div>
         </SidebarHeader>
 
@@ -858,6 +858,7 @@ function HomePageContent() {
         </SidebarContent>
 
         <SidebarFooter>
+          {/* Weekly summary is conditionally rendered based on sidebarState */}
           {sidebarState !== 'collapsed' && (
             <>
               <Separator className="my-2" />
@@ -876,7 +877,7 @@ function HomePageContent() {
                           priceErrorMessage="无法估算价格。"
                           quantityLabel="克"
                           currencySymbol="¥"
-                          isSidebarCollapsed={sidebarState === 'collapsed'}
+                          isSidebarCollapsed={sidebarState === 'collapsed'} // Pass the state
                       />
                   )}
               </ClientErrorBoundary>
@@ -932,19 +933,28 @@ function HomePageContent() {
       <SidebarInset>
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
-              <div className="flex items-center justify-center mb-6 w-full">
-                <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2 mx-4 text-center"> {/* Removed flex-1 and justify-center */}
-                  <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary shrink-0" /> {/* Added shrink-0 */}
-                  <span className="whitespace-nowrap">
-                    {isClient ? formatWeekDisplay(currentWeekStartDate) : '加载周...'}
-                  </span>
-                </h1>
-                <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="下一周 (Next Week)" disabled={!isClient}>
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
+              {/* Header Section with Sidebar Trigger */}
+              <div className="flex items-center justify-center mb-6 w-full relative"> {/* Added relative positioning */}
+                {/* Sidebar Trigger Button - Positioned on the left */}
+                <div className="absolute left-0 top-1/2 -translate-y-1/2">
+                     <SidebarTrigger className="md:hidden" /> {/* Only show on mobile */}
+                </div>
+
+                {/* Week Navigation */}
+                <div className="flex items-center justify-center flex-grow">
+                  <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2 mx-4 text-center">
+                    <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary shrink-0" />
+                    <span className="whitespace-nowrap">
+                      {isClient ? formatWeekDisplay(currentWeekStartDate) : '加载周...'}
+                    </span>
+                  </h1>
+                  <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="下一周 (Next Week)" disabled={!isClient}>
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                 </div>
               </div>
             </ClientErrorBoundary>
 
@@ -1016,4 +1026,3 @@ export default function Home() {
     </SidebarProvider>
   );
 }
-
