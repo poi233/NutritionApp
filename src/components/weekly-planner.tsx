@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { FC } from "react";
@@ -73,32 +72,32 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
       <TableBody>
         {daysOfWeek.map(day => (
           <TableRow key={day}>
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[120px]">
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[100px]"> {/* Reduced min-h */}
               {day}
             </TableCell>
             {mealTypes.map(meal => {
               const slotRecipes = getRecipesForSlot(day, meal);
               return (
-                <TableCell key={`${day}-${meal}`} className="p-2 align-top min-h-[120px]">
-                  <div className="space-y-2">
+                <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[100px]"> {/* Reduced padding and min-h */}
+                  <div className="space-y-1"> {/* Reduced space */}
                      {slotRecipes.length > 0 ? (
                        slotRecipes.map(recipe => (
-                          <Card key={recipe.id} className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[80px]">
-                            <CardHeader className="flex flex-row items-start justify-between p-2 pb-1">
-                              <CardTitle className="text-sm font-medium leading-tight flex-1 mr-1 truncate">{recipe.name}</CardTitle>
-                              <div className="flex items-center space-x-1">
+                          <Card key={recipe.id} className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[60px]"> {/* Reduced min-h */}
+                            <CardHeader className="flex flex-row items-start justify-between p-1.5 pb-0.5"> {/* Reduced padding */}
+                              <CardTitle className="text-xs font-medium leading-tight flex-1 mr-1 truncate" title={recipe.name}>{recipe.name}</CardTitle> {/* Added title attribute for full name on hover */}
+                              <div className="flex items-center space-x-0.5"> {/* Reduced space */}
                                 {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
                                   <Popover>
                                     <PopoverTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                                        <Info className="h-3 w-3" />
+                                      <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground"> {/* Smaller button */}
+                                        <Info className="h-2.5 w-2.5" /> {/* Smaller icon */}
                                          <span className="sr-only">{detailsLabel} {recipe.name}</span>
                                       </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-60 text-sm p-3 max-h-[300px] overflow-y-auto">
-                                       {recipe.description && <p className="mb-2"><strong>{descriptionLabel}:</strong> {recipe.description}</p>}
+                                    <PopoverContent className="w-52 text-xs p-2 max-h-[250px] overflow-y-auto"> {/* Smaller popover */}
+                                       {recipe.description && <p className="mb-1 text-xs"><strong>{descriptionLabel}:</strong> {recipe.description}</p>}
                                       {recipe.calories !== undefined && (
-                                        <div className="space-y-1">
+                                        <div className="space-y-0.5 text-xs">
                                            <p><strong>{nutritionLabel} (估算):</strong></p>
                                            <p>{caloriesLabel}: {recipe.calories.toLocaleString()}</p>
                                            <p>{proteinLabel}: {recipe.protein?.toFixed(1)}克</p>
@@ -107,9 +106,9 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                         </div>
                                       )}
                                       {(recipe.ingredients && recipe.ingredients.length > 0) && (
-                                          <div className="mt-2 pt-2 border-t">
-                                               <p><strong>{ingredientsLabel}:</strong></p>
-                                              <ul className="list-disc pl-4 text-xs">
+                                          <div className="mt-1 pt-1 border-t">
+                                               <p className="text-xs"><strong>{ingredientsLabel}:</strong></p>
+                                              <ul className="list-disc pl-3 text-xs">
                                                   {recipe.ingredients.map(ing => (
                                                       <li key={ing.id || ing.name}>{ing.name} ({ing.quantity}克)</li>
                                                   ))}
@@ -123,22 +122,22 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onDeleteRecipe(recipe.id)}
-                                  className="h-5 w-5 text-destructive hover:bg-destructive/10"
+                                  className="h-4 w-4 text-destructive hover:bg-destructive/10" // Smaller button
                                    aria-label={`${deleteLabel} ${recipe.name}`}
                                 >
-                                  <Trash2 className="h-3 w-3" />
+                                  <Trash2 className="h-2.5 w-2.5" /> {/* Smaller icon */}
                                 </Button>
                               </div>
                             </CardHeader>
                             {recipe.calories !== undefined && (
-                               <CardFooter className="p-2 pt-0 mt-auto">
-                                  <p className="text-xs text-muted-foreground">{recipe.calories?.toFixed(0)} {caloriesLabel} (估算)</p>
+                               <CardFooter className="p-1.5 pt-0 mt-auto"> {/* Reduced padding */}
+                                  <p className="text-[10px] text-muted-foreground">{recipe.calories?.toFixed(0)} {caloriesLabel} (估算)</p> {/* Smaller text */}
                                </CardFooter>
                              )}
                           </Card>
                         ))
                      ) : (
-                       <div className="h-full flex items-center justify-center text-xs text-muted-foreground min-h-[80px]">
+                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground min-h-[60px]"> {/* Smaller text and min-h */}
                           {emptyLabel}
                        </div>
                      )}
