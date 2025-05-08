@@ -271,12 +271,10 @@ const SidebarTrigger = React.forwardRef<
       ref={ref}
       data-sidebar="trigger"
       variant="ghost"
-      size="icon"
+      size="icon" // Consistent icon size
       className={cn(
-         // Use size-8 p-2 when collapsed to match menu buttons
-         "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2",
-         // Default size when expanded
-         "size-7",
+         // Use size-8 (h-8 w-8) and p-2 consistently whether expanded or collapsed
+         "size-8 p-2",
          className
         )}
       onClick={(event) => {
@@ -775,3 +773,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
