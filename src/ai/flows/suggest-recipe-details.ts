@@ -20,7 +20,7 @@ const SuggestedIngredientSchema = z.object({
   quantity: z.coerce
     .number({ invalid_type_error: "数量必须是数字" })
     .min(0.1, "数量必须是大于零的正数")
-    .positive("数量必须是正数")
+    // .positive("数量必须是正数") // Removed to avoid exclusiveMinimum error
     .describe('Estimated quantity in grams (e.g., 150).'),
 });
 
@@ -62,8 +62,8 @@ export async function suggestRecipeDetails(input: SuggestRecipeDetailsInput): Pr
       console.error("AI output failed Zod validation:", error.issues);
       throw new Error(`获取餐点详情失败：AI 返回的数据格式无效或不完整。模式验证错误: ${error.message}`);
     }
-    if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema')) {
-      console.error("AI 返回了无效的 JSON 结构或模式过于复杂。错误详情:", errorMessage);
+    if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema') || errorMessage.includes("exclusiveMinimum")) {
+      console.error("AI 返回了无效的 JSON 结构或模式定义问题。错误详情:", errorMessage);
       throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
     }
     throw new Error(`获取餐点详情失败: ${errorMessage}`);
@@ -81,7 +81,7 @@ const prompt = ai.definePrompt({
 
 请严格按照以下格式提供输出：
 - 'description': 餐点的中文描述。
-- 'ingredients': 一个包含配料对象（每个对象都有 'name' [中文] 和 'quantity' [克，正数]）的数组。确保配料表至少包含一种配料，且数量大于0。
+- 'ingredients': 一个包含配料对象（每个对象都有 'name' [中文] 和 'quantity' [克，正数且大于0.09]）的数组。确保配料表至少包含一种配料，且数量大于0.09克。
 `,
 });
 
@@ -108,7 +108,7 @@ const suggestRecipeDetailsFlow = ai.defineFlow(
           throw new Error('AI 未能提供配料信息。');
       }
        output.ingredients.forEach(ing => {
-         if (ing.quantity <= 0) {
+         if (ing.quantity <= 0) { // Technically .min(0.1) covers this, but good to be explicit if AI doesn't follow strictly
            throw new Error(`AI 提供的配料 "${ing.name}" 数量无效 (${ing.quantity})。数量必须为正。`);
          }
        });
@@ -127,10 +127,11 @@ const suggestRecipeDetailsFlow = ai.defineFlow(
       if (aiError instanceof z.ZodError) {
         throw new Error(`AI 返回数据格式校验失败: ${aiError.message}`);
       }
-      if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema')) {
+      if (errorMessage.includes('Invalid JSON payload') || errorMessage.includes('response_schema') || errorMessage.includes("exclusiveMinimum")) {
          throw new Error(`AI 提示执行失败：AI 返回的数据格式无效或模式过于复杂。${errorMessage}`);
       }
       throw new Error(`AI 提示执行失败: ${errorMessage}`);
     }
   }
 );
+
