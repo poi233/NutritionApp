@@ -272,7 +272,13 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", className)}
+      className={cn(
+         // Use size-8 p-2 when collapsed to match menu buttons
+         "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2",
+         // Default size when expanded
+         "size-7",
+         className
+        )}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
