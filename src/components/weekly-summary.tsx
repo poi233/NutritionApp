@@ -9,6 +9,7 @@ import { ShoppingCart, RefreshCw, AlertTriangle } from "lucide-react";
 import { format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { AggregatedIngredient } from "@/services/pricing";
+import { INGREDIENT_CATEGORIES_ORDERED, groupIngredientsByCategory, type IngredientCategory } from "@/lib/ingredient-categories";
 
 interface WeeklySummaryProps {
   aggregatedIngredients: AggregatedIngredient[];
@@ -41,6 +42,7 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
   currencySymbol,
 }) => {
   const weekDisplay = format(parseISO(weekStartDate), 'MMM d, yyyy', { locale: zhCN });
+  const categorizedIngredients = groupIngredientsByCategory(aggregatedIngredients);
 
   return (
     <Card className="mt-8 shadow-md">
@@ -69,23 +71,31 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
       <CardContent>
         <h3 className="text-lg font-semibold mb-2">{ingredientsListLabel}</h3>
         {aggregatedIngredients.length > 0 ? (
-          <ScrollArea className="h-[200px] rounded-md border p-2">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>食材名称</TableHead>
-                  <TableHead className="text-right">总量 ({quantityLabel})</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {aggregatedIngredients.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell className="text-right">{item.totalQuantity.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <ScrollArea className="h-[300px] rounded-md border p-2"> {/* Increased height */}
+            {INGREDIENT_CATEGORIES_ORDERED.map(category => {
+              const itemsInCategory = categorizedIngredients[category];
+              if (!itemsInCategory || itemsInCategory.length === 0) {
+                return null; // Don't render section if category is empty
+              }
+              return (
+                <div key={category} className="mb-4 last:mb-0">
+                  <h4 className="text-md font-semibold text-primary mb-1 sticky top-0 bg-background/95 p-1 z-10 -ml-1 -mr-1 pl-2 rounded-t-sm">
+                    {category}
+                  </h4>
+                  <Table className="mt-0">
+                    {/* No header per category to save space, header is implicit by category title */}
+                    <TableBody>
+                      {itemsInCategory.map((item, index) => (
+                        <TableRow key={`${category}-${index}-${item.name}`}>
+                          <TableCell className="py-1 text-sm">{item.name}</TableCell>
+                          <TableCell className="text-right py-1 text-sm">{item.totalQuantity.toLocaleString()} {quantityLabel}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })}
           </ScrollArea>
         ) : (
           <p className="text-sm text-muted-foreground">{noIngredientsMessage}</p>
@@ -94,3 +104,4 @@ export const WeeklySummary: FC<WeeklySummaryProps> = ({
     </Card>
   );
 };
+
