@@ -291,7 +291,9 @@ const SidebarTrigger = React.forwardRef<
       variant="ghost"
       size="icon" 
       className={cn(
-         "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center", 
+         "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center",
+         // Ensure consistent alignment when collapsed
+         "group-data-[state=collapsed]/sidebar-wrapper:ml-auto",
          className
         )}
       onClick={(event) => {
@@ -346,7 +348,7 @@ const SidebarInset = React.forwardRef<
     <main 
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col items-center bg-background transition-[padding-left,padding-right] duration-200 ease-linear", 
+        "relative flex min-h-svh flex-1 flex-col bg-background transition-[padding-left,padding-right] duration-200 ease-linear", 
          !isMobile && state === 'expanded' ? (side === 'left' ? "pl-[--sidebar-width]" : "pr-[--sidebar-width]") : "", 
          !isMobile && state === 'collapsed' ? (side === 'left' ? "pl-[--sidebar-width-icon]" : "pr-[--sidebar-width-icon]") : "", 
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",

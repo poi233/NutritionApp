@@ -32,7 +32,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added AlertDialogTrigger
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -733,6 +733,7 @@ function HomePageContent() {
             <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
               <Settings2 className="h-5 w-5" /> 操作面板
             </h2>
+            <SidebarTrigger className="group-data-[collapsible=icon]:ml-auto" />
            </div>
         </SidebarHeader>
 
@@ -911,10 +912,7 @@ function HomePageContent() {
         <main className="flex-1 py-4 px-2 md:px-2 lg:px-2 max-w-5xl overflow-y-auto mx-auto">
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
               <div className="flex items-center justify-center mb-6 w-full relative">
-                <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                     <SidebarTrigger />
-                </div>
-
+                 {/* SidebarTrigger removed from here */}
                 <div className="flex items-center justify-center flex-grow">
                   <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
                     <ArrowLeft className="h-5 w-5" />
