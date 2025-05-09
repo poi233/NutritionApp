@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Settings2, Check } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Settings2, Check, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
@@ -32,7 +32,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
+    AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,7 +166,7 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState } = useSidebar();
+  const { state: sidebarState, setOpen: setSidebarOpen, open: isSidebarOpen } = useSidebar();
 
   useEffect(() => {
     console.log("HomePageContent component mounted on client.");
@@ -727,144 +727,152 @@ function HomePageContent() {
 
   return (
     <>
-        <Sidebar variant="sidebar" collapsible="icon" side="left">
-        <SidebarHeader>
-           <div className="flex items-center justify-between w-full">
-            <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-              <Settings2 className="h-5 w-5" /> 操作面板
-            </h2>
-            <SidebarTrigger className="group-data-[collapsible=icon]:ml-auto" />
-           </div>
-        </SidebarHeader>
+       <div className="flex min-h-screen w-full">
+        <Sidebar variant="sidebar" collapsible="icon" side="left" className="group fixed md:sticky top-0 z-20">
+            <SidebarHeader className="justify-between">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden"
+                    onClick={() => setSidebarOpen(!isSidebarOpen)}
+                    aria-label={isSidebarOpen ? "关闭侧边栏" : "打开侧边栏"}
+                >
+                    {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+                </Button>
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+                  <Settings2 className="h-5 w-5" /> 操作面板
+                </h2>
+                <SidebarTrigger className="hidden md:flex group-data-[collapsible=icon]:ml-auto" />
+            </SidebarHeader>
 
-        <SidebarContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                  <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
-                    <DialogTrigger asChild>
-                      <SidebarMenuButton
-                        variant="default"
-                        tooltip="手动添加餐点"
-                        disabled={!isClient}
+            <SidebarContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                      <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
+                        <DialogTrigger asChild>
+                          <SidebarMenuButton
+                            variant="default"
+                            tooltip="手动添加餐点"
+                            disabled={!isClient}
+                          >
+                            <PlusSquare />
+                            <span className="group-data-[collapsible=icon]:hidden">手动添加餐点</span>
+                          </SidebarMenuButton>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>添加新餐点</DialogTitle>
+                            <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
+                          </DialogHeader>
+                          <RecipeInputForm
+                            onAddRecipe={handleAddRecipe}
+                            onCloseDialog={() => setIsAddRecipeDialogOpen(false)}
+                            currentWeekStartDate={currentWeekStartDate}
+                            daysOfWeek={daysOfWeek}
+                            mealTypes={mealTypes}
+                            addMealTitle="添加餐点，为"
+                            recipeNameLabel="食谱/餐点名称 *"
+                            recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
+                            dayOfWeekLabel="星期 *"
+                            dayOfWeekPlaceholder="选择日期"
+                            mealTypeLabel="餐别 *"
+                            mealTypePlaceholder="选择餐别"
+                            descriptionLabel="描述（可选）"
+                            descriptionPlaceholder="例如，快速简单的早餐..."
+                            ingredientsLabel="成分（用于营养估算，可选）"
+                            ingredientNamePlaceholder="成分名称"
+                            quantityPlaceholder="数量 (克)"
+                            addIngredientLabel="添加成分行"
+                            submitButtonLabel="添加餐点"
+                            autoFillDetailsLabel="智能填充详情"
+                          />
+                        </DialogContent>
+                      </Dialog>
+                  </SidebarMenuItem>
+
+                  <SidebarMenuItem>
+                     <SidebarMenuButton
+                         onClick={triggerAnalysis}
+                         disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
+                         variant="default"
+                         tooltip="分析营养"
                       >
-                        <PlusSquare />
-                        <span className="group-data-[collapsible=icon]:hidden">手动添加餐点</span>
-                      </SidebarMenuButton>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>添加新餐点</DialogTitle>
-                        <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
-                      </DialogHeader>
-                      <RecipeInputForm
-                        onAddRecipe={handleAddRecipe}
-                        onCloseDialog={() => setIsAddRecipeDialogOpen(false)}
-                        currentWeekStartDate={currentWeekStartDate}
-                        daysOfWeek={daysOfWeek}
-                        mealTypes={mealTypes}
-                        addMealTitle="添加餐点，为"
-                        recipeNameLabel="食谱/餐点名称 *"
-                        recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
-                        dayOfWeekLabel="星期 *"
-                        dayOfWeekPlaceholder="选择日期"
-                        mealTypeLabel="餐别 *"
-                        mealTypePlaceholder="选择餐别"
-                        descriptionLabel="描述（可选）"
-                        descriptionPlaceholder="例如，快速简单的早餐..."
-                        ingredientsLabel="成分（用于营养估算，可选）"
-                        ingredientNamePlaceholder="成分名称"
-                        quantityPlaceholder="数量 (克)"
-                        addIngredientLabel="添加成分行"
-                        submitButtonLabel="添加餐点"
-                        autoFillDetailsLabel="智能填充详情"
-                      />
-                    </DialogContent>
-                  </Dialog>
-              </SidebarMenuItem>
+                        {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
+                         <span className="group-data-[collapsible=icon]:hidden">分析营养</span>
+                     </SidebarMenuButton>
+                  </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                 <SidebarMenuButton
-                     onClick={triggerAnalysis}
-                     disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
-                     variant="default"
-                     tooltip="分析营养"
-                  >
-                    {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
-                     <span className="group-data-[collapsible=icon]:hidden">分析营养</span>
-                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                  <SidebarMenuItem>
+                     <SidebarMenuButton
+                         onClick={openGeneratePreferencesDialog}
+                         disabled={!isClient || isLoadingGeneration}
+                         variant="default"
+                         tooltip="生成餐点建议"
+                      >
+                        {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
+                         <span className="group-data-[collapsible=icon]:hidden">生成餐点建议</span>
+                     </SidebarMenuButton>
+                  </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                 <SidebarMenuButton
-                     onClick={openGeneratePreferencesDialog}
-                     disabled={!isClient || isLoadingGeneration}
-                     variant="default"
-                     tooltip="生成餐点建议"
-                  >
-                    {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
-                     <span className="group-data-[collapsible=icon]:hidden">生成餐点建议</span>
-                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                   <SidebarMenuItem>
+                      <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
+                         <AlertDialogTrigger asChild>
+                          <SidebarMenuButton
+                            variant="destructive"
+                            disabled={!isClient || currentWeekRecipes.length === 0}
+                            tooltip="移除所有餐点"
+                           >
+                            <Trash2 />
+                             <span className="group-data-[collapsible=icon]:hidden">移除所有餐点</span>
+                          </SidebarMenuButton>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>您确定吗？</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              此操作无法撤销。这将永久删除从 {isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有已计划餐点。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>取消</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleRemoveAllRecipes}>
+                              继续
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                   </SidebarMenuItem>
 
-               <SidebarMenuItem>
-                  <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
-                    <AlertDialogTrigger asChild>
-                      <SidebarMenuButton
-                        variant="destructive"
-                        disabled={!isClient || currentWeekRecipes.length === 0}
-                        tooltip="移除所有餐点"
-                       >
-                        <Trash2 />
-                         <span className="group-data-[collapsible=icon]:hidden">移除所有餐点</span>
-                      </SidebarMenuButton>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>您确定吗？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          此操作无法撤销。这将永久删除从 {isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有已计划餐点。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>取消</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRemoveAllRecipes}>
-                          继续
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-               </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarContent>
 
-            </SidebarMenu>
-        </SidebarContent>
-
-        <SidebarFooter>
-          {sidebarState !== 'collapsed' && (
-            <>
-              <Separator className="my-2" />
-              <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
-                  {isClient && (
-                      <WeeklySummary
-                          aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
-                          estimatedPrice={estimatedPrice}
-                          isLoadingPrice={isLoadingPrice}
-                          weekStartDate={currentWeekStartDate}
-                          title="本周食材汇总"
-                          totalEstimatedPriceLabel="预估总价"
-                          ingredientsListLabel="食材清单"
-                          noIngredientsMessage="本周计划中没有食材。"
-                          priceLoadingMessage="正在估算价格..."
-                          priceErrorMessage="无法估算价格。"
-                          quantityLabel="克"
-                          currencySymbol="¥"
-                          isSidebarCollapsed={sidebarState === 'collapsed'}
-                      />
-                  )}
-              </ClientErrorBoundary>
-            </>
-          )}
-        </SidebarFooter>
-      </Sidebar>
+            <SidebarFooter>
+              {sidebarState !== 'collapsed' && (
+                <>
+                  <Separator className="my-2" />
+                  <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
+                      {isClient && (
+                          <WeeklySummary
+                              aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
+                              estimatedPrice={estimatedPrice}
+                              isLoadingPrice={isLoadingPrice}
+                              weekStartDate={currentWeekStartDate}
+                              title="本周食材汇总"
+                              totalEstimatedPriceLabel="预估总价"
+                              ingredientsListLabel="食材清单"
+                              noIngredientsMessage="本周计划中没有食材。"
+                              priceLoadingMessage="正在估算价格..."
+                              priceErrorMessage="无法估算价格。"
+                              quantityLabel="克"
+                              currencySymbol="¥"
+                              isSidebarCollapsed={sidebarState === 'collapsed'}
+                          />
+                      )}
+                  </ClientErrorBoundary>
+                </>
+              )}
+            </SidebarFooter>
+        </Sidebar>
 
         <Dialog open={isGeneratePreferencesDialogOpen} onOpenChange={setIsGeneratePreferencesDialogOpen}>
             <DialogContent className="sm:max-w-md">
@@ -908,83 +916,83 @@ function HomePageContent() {
         </Dialog>
 
 
-      <SidebarInset>
-        <main className="flex-1 py-4 px-2 md:px-2 lg:px-2 max-w-5xl overflow-y-auto mx-auto">
-            <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
-              <div className="flex items-center justify-center mb-6 w-full relative">
-                 {/* SidebarTrigger removed from here */}
-                <div className="flex items-center justify-center flex-grow">
-                  <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                  <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2 mx-4 text-center">
-                    <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary shrink-0" />
-                    <span className="whitespace-nowrap">
-                      {isClient ? formatWeekDisplay(currentWeekStartDate) : '加载周...'}
-                    </span>
-                  </h1>
-                  <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="下一周 (Next Week)" disabled={!isClient}>
-                    <ArrowRight className="h-5 w-5" />
-                  </Button>
-                 </div>
-              </div>
-            </ClientErrorBoundary>
-
-            <div className="w-full space-y-8">
-              <ClientErrorBoundary fallback={<p className="text-red-500">周计划表加载失败。</p>}>
-                {isClient ? (
-                  <WeeklyPlanner
-                    recipes={currentWeekRecipes}
-                    onDeleteRecipe={handleDeleteRecipe}
-                    daysOfWeek={daysOfWeek}
-                    mealTypes={mealTypes}
-                    deleteLabel="删除"
-                    detailsLabel="详细信息"
-                    emptyLabel="空"
-                    nutritionLabel="营养"
-                    ingredientsLabel="成分"
-                    descriptionLabel="描述"
-                    caloriesLabel="卡路里"
-                    proteinLabel="蛋白质"
-                    fatLabel="脂肪"
-                    carbsLabel="碳水化合物"
-                  />
-                ) : (
-                  <div className="w-full h-64 bg-muted rounded-md animate-pulse flex items-center justify-center">
-                    加载计划表...
+        <SidebarInset>
+            <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center"> {/* Added flex flex-col items-center */}
+                <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
+                  <div className="flex items-center justify-center mb-6 w-full relative max-w-5xl"> {/* Added max-w-5xl */}
+                    <div className="flex items-center justify-center flex-grow">
+                      <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
+                        <ArrowLeft className="h-5 w-5" />
+                      </Button>
+                      <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2 mx-4 text-center">
+                        <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary shrink-0" />
+                        <span className="whitespace-nowrap">
+                          {isClient ? formatWeekDisplay(currentWeekStartDate) : '加载周...'}
+                        </span>
+                      </h1>
+                      <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="下一周 (Next Week)" disabled={!isClient}>
+                        <ArrowRight className="h-5 w-5" />
+                      </Button>
+                     </div>
                   </div>
-                )}
-              </ClientErrorBoundary>
+                </ClientErrorBoundary>
+
+                <div className="w-full space-y-8 max-w-5xl"> {/* Added max-w-5xl */}
+                  <ClientErrorBoundary fallback={<p className="text-red-500">周计划表加载失败。</p>}>
+                    {isClient ? (
+                      <WeeklyPlanner
+                        recipes={currentWeekRecipes}
+                        onDeleteRecipe={handleDeleteRecipe}
+                        daysOfWeek={daysOfWeek}
+                        mealTypes={mealTypes}
+                        deleteLabel="删除"
+                        detailsLabel="详细信息"
+                        emptyLabel="空"
+                        nutritionLabel="营养"
+                        ingredientsLabel="成分"
+                        descriptionLabel="描述"
+                        caloriesLabel="卡路里"
+                        proteinLabel="蛋白质"
+                        fatLabel="脂肪"
+                        carbsLabel="碳水化合物"
+                      />
+                    ) : (
+                      <div className="w-full h-64 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                        加载计划表...
+                      </div>
+                    )}
+                  </ClientErrorBoundary>
 
 
-              <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
-                {isClient ? (
-                  <NutritionalAnalysis
-                    analysis={nutritionalAnalysis}
-                    isLoading={isLoadingAnalysis}
-                    weekStartDate={currentWeekStartDate}
-                    title="每周营养分析"
-                    descriptionPrefix="从"
-                    descriptionSuffix="开始的一周的见解（基于带成分的餐点）"
-                    overallBalanceLabel="整体平衡"
-                    macroRatioLabel="宏量营养素比例"
-                    suggestionsLabel="改进建议"
-                    breakdownLabel="已分析餐点细分"
-                    noAnalysisTitle="营养分析"
-                    noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。"
-                    noAnalysisData="无可用分析数据。"
-                    analysisFailed="无法生成营养见解。"
-                    noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。"
-                  />
-                ) : (
-                  <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
-                    加载分析中...
-                  </div>
-                )}
-              </ClientErrorBoundary>
-            </div>
-        </main>
-      </SidebarInset>
+                  <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
+                    {isClient ? (
+                      <NutritionalAnalysis
+                        analysis={nutritionalAnalysis}
+                        isLoading={isLoadingAnalysis}
+                        weekStartDate={currentWeekStartDate}
+                        title="每周营养分析"
+                        descriptionPrefix="从"
+                        descriptionSuffix="开始的一周的见解（基于带成分的餐点）"
+                        overallBalanceLabel="整体平衡"
+                        macroRatioLabel="宏量营养素比例"
+                        suggestionsLabel="改进建议"
+                        breakdownLabel="已分析餐点细分"
+                        noAnalysisTitle="营养分析"
+                        noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。"
+                        noAnalysisData="无可用分析数据。"
+                        analysisFailed="无法生成营养见解。"
+                        noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。"
+                      />
+                    ) : (
+                      <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                        加载分析中...
+                      </div>
+                    )}
+                  </ClientErrorBoundary>
+                </div>
+            </main>
+        </SidebarInset>
+       </div>
     </>
   );
 }
@@ -992,8 +1000,9 @@ function HomePageContent() {
 
 export default function Home() {
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={false}> {/* Default to collapsed sidebar */}
       <HomePageContent />
     </SidebarProvider>
   );
 }
+

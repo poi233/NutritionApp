@@ -3,7 +3,7 @@
 
 import type { FC } from "react";
 import type { Recipe } from "@/types/recipe";
-import { Card, CardHeader, CardTitle, CardFooter, CardContent } from "@/components/ui/card"; // Added CardContent
+import { Card, CardHeader, CardTitle, CardFooter, CardContent } from "@/components/ui/card"; 
 import { Button } from "@/components/ui/button";
 import { Trash2, Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"; // Import Table components
+} from "@/components/ui/table"; 
 
 interface WeeklyPlannerProps {
   recipes: Recipe[];
@@ -34,7 +34,7 @@ interface WeeklyPlannerProps {
   carbsLabel: string;
 }
 
-const MAX_VISIBLE_STACKED_CARDS = 3; // Limit how many cards are visually stacked before just showing a count
+const MAX_VISIBLE_STACKED_CARDS = 3; 
 
 export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     recipes,
@@ -53,19 +53,17 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     carbsLabel
  }) => {
 
-  // Get all recipes for a specific day and meal type
   const getRecipesForSlot = (day: string, meal: string): Recipe[] => {
     return recipes.filter(r => r.dayOfWeek === day && r.mealType === meal);
   };
 
   return (
-    <Table className="border shadow-md rounded-md overflow-hidden table-fixed mx-auto w-max"> {/* Added w-max for proper centering */}
+    <Table className="border shadow-md rounded-md overflow-hidden w-full"> {/* Changed from table-fixed mx-auto w-max */}
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-           {/* Adjust widths to make table narrower */}
-          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[70px] min-w-[70px] font-semibold text-foreground text-center">日期</TableHead>
+          <TableHead className="sticky left-0 bg-muted/50 z-10 w-[60px] min-w-[60px] font-semibold text-foreground text-center align-middle">日期</TableHead> {/* Adjusted width, added align-middle */}
           {mealTypes.map(meal => (
-            <TableHead key={meal} className="w-[120px] min-w-[120px] font-semibold text-center text-foreground"> {/* Reduced width */}
+            <TableHead key={meal} className="min-w-[100px] font-semibold text-center text-foreground align-middle"> {/* Adjusted width, added align-middle */}
               {meal}
             </TableHead>
           ))}
@@ -74,21 +72,20 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
       <TableBody>
         {daysOfWeek.map(day => (
           <TableRow key={day}>
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[60px]"> {/* Reduced min-h */}
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[60px]"> 
               {day}
             </TableCell>
             {mealTypes.map(meal => {
               const slotRecipes = getRecipesForSlot(day, meal);
               const totalRecipesInSlot = slotRecipes.length;
               return (
-                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[60px] relative"> {/* Add relative positioning back, reduced min-h */}
-                  {/* Use simple vertical spacing instead of negative margin stacking */}
+                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[60px] relative"> 
                   <div className="space-y-1">
                      {totalRecipesInSlot > 0 ? (
                        slotRecipes.map((recipe, index) => (
                           <Card
                             key={recipe.id}
-                            className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 w-full overflow-hidden min-h-[40px] z-0 hover:z-10" // Adjusted min-h
+                            className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 w-full overflow-hidden min-h-[40px] z-0 hover:z-10" 
                           >
                             <CardHeader className="p-1.5 pb-0 flex-shrink-0">
                               <CardTitle className="text-[10px] font-medium leading-tight truncate" title={recipe.name}>
@@ -146,7 +143,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                           </Card>
                         ))
                      ) : (
-                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground min-h-[60px]"> {/* Reduced min-h */}
+                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground min-h-[60px]"> 
                           {emptyLabel}
                        </div>
                      )}
@@ -160,3 +157,4 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
+
