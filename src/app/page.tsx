@@ -32,8 +32,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -914,6 +914,7 @@ function HomePageContent() {
                             value={generateDialogPreferences.preferences || ""}
                             onChange={(e) => setGenerateDialogPreferences(prev => ({ ...prev, preferences: e.target.value }))}
                             className="w-full min-h-[60px]"
+                            className="w-full min-h-[60px]"
                         />
                     </div>
                 </div>
@@ -932,7 +933,7 @@ function HomePageContent() {
       {/* Main Content Area */}
       <SidebarInset>
          {/* Reduced horizontal padding */}
-        <main className="flex-1 py-4 px-2 md:px-2 lg:px-2 max-w-5xl overflow-y-auto">
+        <main className="flex-1 py-4 px-2 md:px-2 lg:px-2 max-w-5xl overflow-y-auto mx-auto">
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
               {/* Header Section with Sidebar Trigger */}
               <div className="flex items-center justify-center mb-6 w-full relative"> {/* Added relative positioning */}
@@ -1022,7 +1023,7 @@ function HomePageContent() {
 
 export default function Home() {
   return (
-    <SidebarProvider defaultOpen={true}>
+    <SidebarProvider defaultOpen={false}> {/* Changed defaultOpen to false */}
       <HomePageContent />
     </SidebarProvider>
   );
