@@ -3,14 +3,14 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft, PanelRight, PanelLeftClose, PanelLeftOpen } from "lucide-react" 
+import { PanelLeft, PanelRight, PanelLeftClose, PanelLeftOpen, X } from "lucide-react" 
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/use-mobile" // Still useful for other conditional rendering, but not for Sheet behavior
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger as RadixSheetTrigger } from "@/components/ui/sheet"  // Renamed to avoid conflict
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -29,9 +29,9 @@ type SidebarContext = {
   state: "expanded" | "collapsed"
   open: boolean
   setOpen: (open: boolean) => void
-  openMobile: boolean
-  setOpenMobile: (open: boolean) => void
-  isMobile: boolean
+  // openMobile: boolean // No longer needed as primary mechanism
+  // setOpenMobile: (open: boolean) => void // No longer needed
+  isMobile: boolean // Can still be used for other responsive adjustments
   toggleSidebar: () => void
   side: "left" | "right"; 
 }
@@ -70,8 +70,7 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobileHookValue = useIsMobile()
-    const [openMobile, setOpenMobile] = React.useState(false) 
-
+    
     const [_open, _setOpen] = React.useState(defaultOpen)
     const open = openProp ?? _open
     const setOpen = React.useCallback(
@@ -82,7 +81,7 @@ const SidebarProvider = React.forwardRef<
         } else {
           _setOpen(openState)
         }
-        if (typeof document !== 'undefined') { // Check for document for SSR
+        if (typeof document !== 'undefined') { 
           document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
         }
       },
@@ -90,15 +89,12 @@ const SidebarProvider = React.forwardRef<
     )
 
     const toggleSidebar = React.useCallback(() => {
-      if (isMobileHookValue) {
-        setOpenMobile((currentOpenState) => !currentOpenState);
-      } else {
-        setOpen((currentOpenState) => !currentOpenState);
-      }
-    }, [setOpen, isMobileHookValue, setOpenMobile])
+      // Always toggle the main 'open' state, regardless of mobile or desktop
+      setOpen((currentOpenState) => !currentOpenState);
+    }, [setOpen])
 
     React.useEffect(() => {
-      if (typeof window !== 'undefined') { // Check for window for SSR
+      if (typeof window !== 'undefined') { 
         const handleKeyDown = (event: KeyboardEvent) => {
           if (
             event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
@@ -122,12 +118,11 @@ const SidebarProvider = React.forwardRef<
         open,
         setOpen,
         isMobile: isMobileHookValue,
-        openMobile, 
-        setOpenMobile,
+        // openMobile and setOpenMobile are removed as Sheet is no longer the primary mobile behavior here
         toggleSidebar,
         side, 
       }),
-      [state, open, setOpen, isMobileHookValue, openMobile, setOpenMobile, toggleSidebar, side]
+      [state, open, setOpen, isMobileHookValue, toggleSidebar, side]
     )
 
     return (
@@ -176,33 +171,14 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { state, side: contextSide, isMobile, openMobile, setOpenMobile } = useSidebar()
+    const { state, side: contextSide } = useSidebar() // Removed isMobile, openMobile, setOpenMobile
     const side = props.side || contextSide; 
 
-    if (isMobile) {
-      return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-          {/* The actual <SheetTrigger> is now expected to be rendered externally for mobile */}
-          <SheetContent side={side} className={cn("w-[var(--sidebar-width)] p-0", className)} {...props}>
-             <SheetHeader className="sr-only"> 
-                <SheetTitle>操作面板</SheetTitle>
-             </SheetHeader>
-            <div
-              data-sidebar="sidebar"
-              className="flex h-full w-full flex-col bg-sidebar"
-            >
-              {children} {/* SidebarHeader, SidebarContent, SidebarFooter passed as children will be inside SheetContent */}
-            </div>
-          </SheetContent>
-        </Sheet>
-      )
-    }
-
-
+    // Always render the div-based sidebar, no Sheet for mobile
     return (
       <div
         ref={ref}
-        className={cn("group peer text-sidebar-foreground md:block", className, isMobile ? "hidden" : "block")} // Ensure hidden on mobile, block on md+
+        className={cn("group peer text-sidebar-foreground block", className)} // Always block
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
@@ -212,31 +188,31 @@ const Sidebar = React.forwardRef<
         <div
           className={cn(
             "duration-200 relative h-svh bg-transparent transition-[width] ease-linear",
-            collapsible === 'icon' && state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]", 
+            collapsible === 'icon' && state === 'expanded' ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-width-icon)]", 
             "group-data-[side=right]:rotate-180",
              variant === "floating" || variant === "inset"
                ? state === 'expanded'
-                 ? "w-[--sidebar-width]" 
+                 ? "w-[var(--sidebar-width)]" 
                  : "w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" 
                : state === 'expanded'
-                 ? "w-[--sidebar-width]" 
-                 : "w-[--sidebar-width-icon]" 
+                 ? "w-[var(--sidebar-width)]" 
+                 : "w-[var(--sidebar-width-icon)]" 
           )}
         />
         <div
           className={cn(
             "duration-200 fixed inset-y-0 z-10 h-svh transition-[left,right,width] ease-linear flex", 
-             collapsible === 'icon' && state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]", 
+             collapsible === 'icon' && state === 'expanded' ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-width-icon)]", 
             side === "left"
               ? "left-0"
               : "right-0",
             variant === "floating" || variant === "inset"
                ? state === 'expanded'
-                 ? "p-2 w-[--sidebar-width]" 
+                 ? "p-2 w-[var(--sidebar-width)]" 
                  : "p-2 w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]" 
                : state === 'expanded'
-                 ? "w-[--sidebar-width] group-data-[side=left]:border-r group-data-[side=right]:border-l" 
-                 : "w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l", 
+                 ? "w-[var(--sidebar-width)] group-data-[side=left]:border-r group-data-[side=right]:border-l" 
+                 : "w-[var(--sidebar-width-icon)] group-data-[side=left]:border-r group-data-[side=right]:border-l", 
           )}
           {...props}
         >
@@ -257,18 +233,12 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar, side, state, isMobile, openMobile } = useSidebar()
+  const { toggleSidebar, side, state } = useSidebar() // Removed isMobile, openMobile
 
-  // This trigger component is now primarily for desktop.
-  // Mobile trigger will be handled separately in page.tsx.
-  // So, icon logic should focus on desktop state.
   const Icon = state === 'expanded' 
     ? (side === "left" ? PanelLeftClose : PanelRight) 
     : (side === "left" ? PanelLeftOpen : PanelRight);
 
-  // This trigger should not be rendered on mobile if the mobile trigger is handled externally.
-  // However, if it *is* rendered (e.g. if page.tsx logic changes), it should still function.
-  // Forcing visibility for desktop and ensuring it calls toggleSidebar.
   return (
     <Button
       ref={ref}
@@ -276,26 +246,24 @@ const SidebarTrigger = React.forwardRef<
       variant="ghost"
       size="icon" 
       className={cn(
-         "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center",
+         "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center", // Always visible style
          className
         )}
       onClick={(event) => {
         onClick?.(event)
-        toggleSidebar() // This will correctly toggle mobile sheet or desktop sidebar
+        toggleSidebar() 
       }}
       {...props}
     >
       <Icon />
       <span className="sr-only">
-        {/* Label reflects current context (desktop state or mobile state) */}
-        {isMobile 
-          ? (openMobile ? '收起侧边栏' : '展开侧边栏') 
-          : (state === 'expanded' ? '收起侧边栏' : '展开侧边栏')}
+        {state === 'expanded' ? '收起侧边栏' : '展开侧边栏'}
       </span>
     </Button>
   )
 })
 SidebarTrigger.displayName = "SidebarTrigger"
+
 
 const SidebarRail = React.forwardRef<
   HTMLButtonElement,
@@ -329,25 +297,21 @@ const SidebarInset = React.forwardRef<
   HTMLMainElement, 
   React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
-  const { state, side, isMobile, openMobile } = useSidebar(); 
+  const { state, side } = useSidebar(); 
 
   return (
     <main 
       ref={ref}
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background transition-[padding-left,padding-right] duration-200 ease-linear", 
-        // Apply padding based on desktop sidebar state
-        !isMobile && state === 'expanded' && (side === 'left' ? "pl-[var(--sidebar-width)]" : "pr-[var(--sidebar-width)]"),
-        !isMobile && state === 'collapsed' && (side === 'left' ? "pl-[var(--sidebar-width-icon)]" : "pr-[var(--sidebar-width-icon)]"),
+        // Apply padding based on sidebar state, regardless of mobile
+        state === 'expanded' && (side === 'left' ? "pl-[var(--sidebar-width)]" : "pr-[var(--sidebar-width)]"),
+        state === 'collapsed' && (side === 'left' ? "pl-[var(--sidebar-width-icon)]" : "pr-[var(--sidebar-width-icon)]"),
         
-        // Mobile padding: if sidebar (Sheet) is open, add padding to avoid content overlap IF the sheet is not an overlay
-        // However, Sheet is typically an overlay. If main content needs to shift, this logic might be needed.
-        // For now, assuming Sheet overlays and main content doesn't need to shift based on mobile sidebar.
-        // isMobile && openMobile && (side === 'left' ? "pl-[var(--sidebar-width)]" : "pr-[var(--sidebar-width)]"), // Example if needed
-
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))]",
         "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
-        !isMobile && state === 'collapsed' && (side === 'left' ? "md:peer-data-[variant=inset]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" : "md:peer-data-[variant=inset]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"),
+        // Removed !isMobile check for collapsed inset padding
+        state === 'collapsed' && (side === 'left' ? "md:peer-data-[variant=inset]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" : "md:peer-data-[variant=inset]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"),
         className
       )}
       {...props}
@@ -378,11 +342,12 @@ const SidebarHeader = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div">
 >(({ className, ...props }, ref) => {
+  // Removed isMobile check for trigger placement, trigger is now always part of header
   return (
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex flex-col gap-2 p-2 items-center", className)} // Kept items-center for desktop trigger centering.
+      className={cn("flex flex-row items-center justify-start p-2", className)} 
       {...props}
     />
   )
@@ -579,7 +544,7 @@ const SidebarMenuButton = React.forwardRef<
     ref
   ) => {
     const Comp = asChild ? Slot : "button"
-    const { isMobile, state } = useSidebar()
+    const { state } = useSidebar() // Removed isMobile
 
     const button = (
       <Comp
@@ -608,7 +573,7 @@ const SidebarMenuButton = React.forwardRef<
         <TooltipContent
           side="right"
           align="center"
-          hidden={state !== "collapsed" || isMobile}
+          hidden={state !== "collapsed"} // Simplified: show tooltip only when collapsed (desktop or mobile)
           {...tooltip}
         />
       </Tooltip>
@@ -785,5 +750,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-
