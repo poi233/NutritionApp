@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -933,8 +931,8 @@ function HomePageContent() {
 
       {/* Main Content Area */}
       <SidebarInset>
-         {/* Reduced max-width and removed mx-auto for left alignment */}
-        <main className="flex-1 p-4 md:px-6 lg:px-8 max-w-6xl overflow-y-auto"> {/* Adjusted max-width and removed mx-auto */}
+         {/* Reduced max-width, removed mx-auto, and adjusted horizontal padding */}
+        <main className="flex-1 p-4 md:px-2 lg:px-4 max-w-5xl overflow-y-auto"> {/* Reduced px, max-width */}
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
               {/* Header Section with Sidebar Trigger */}
               <div className="flex items-center justify-center mb-6 w-full relative"> {/* Added relative positioning */}
@@ -1029,4 +1027,3 @@ export default function Home() {
     </SidebarProvider>
   );
 }
-
