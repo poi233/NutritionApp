@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Settings2, Check, PanelLeftClose, PanelLeftOpen, PanelRight } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Check, FileText } from "lucide-react"; // Removed Panel icons, added FileText
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
@@ -32,8 +33,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog"; 
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,17 +42,15 @@ import { getNutrition } from "@/services/nutrition";
 import { estimateTotalPriceForIngredients, type AggregatedIngredient } from "@/services/pricing";
 
 import {
-  SidebarProvider,
+  SidebarProvider, 
   Sidebar,
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarTrigger,
   SidebarInset,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 
@@ -166,7 +165,6 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState, side } = useSidebar();
 
 
   useEffect(() => {
@@ -324,7 +322,7 @@ function HomePageContent() {
         ingredients: newRecipeData.ingredients
           .filter(ing => ing.name && ing.quantity > 0)
           .map((ing, index) => ({
-            id: `ingredient-${recipeId}-${index}`,
+            id: `ingredient-gen-${recipeId}-${index}`,
             name: ing.name,
             quantity: Number(ing.quantity) || 0,
           })),
@@ -733,9 +731,11 @@ function HomePageContent() {
   return (
     <>
        <div className="flex min-h-screen w-full">
-         <Sidebar variant="sidebar" collapsible="icon" side="left" className="group md:sticky top-0 z-20"> 
+         <Sidebar variant="sidebar" side="left" className="group md:sticky top-0 z-20"> 
             <SidebarHeader>
-                <SidebarTrigger /> {/* Always visible trigger */}
+                <div className="p-2 h-8 flex items-center justify-center"> 
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
             </SidebarHeader>
             
             <SidebarContent>
@@ -749,7 +749,8 @@ function HomePageContent() {
                             disabled={!isClient}
                           >
                             <PlusSquare />
-                            <span className="group-data-[collapsible=icon]:hidden">手动添加餐点</span>
+                            {/* Text span will be hidden by SidebarMenuButton's internal styling for icon-only mode */}
+                            <span>手动添加餐点</span>
                           </SidebarMenuButton>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -791,7 +792,7 @@ function HomePageContent() {
                          tooltip="分析营养"
                       >
                         {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
-                         <span className="group-data-[collapsible=icon]:hidden">分析营养</span>
+                         <span>分析营养</span>
                      </SidebarMenuButton>
                   </SidebarMenuItem>
 
@@ -803,7 +804,7 @@ function HomePageContent() {
                          tooltip="生成餐点建议"
                       >
                         {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
-                         <span className="group-data-[collapsible=icon]:hidden">生成餐点建议</span>
+                         <span>生成餐点建议</span>
                      </SidebarMenuButton>
                   </SidebarMenuItem>
 
@@ -816,7 +817,7 @@ function HomePageContent() {
                             tooltip="移除所有餐点"
                            >
                             <Trash2 />
-                             <span className="group-data-[collapsible=icon]:hidden">移除所有餐点</span>
+                             <span>移除所有餐点</span>
                           </SidebarMenuButton>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -837,32 +838,8 @@ function HomePageContent() {
                    </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarContent>
-
             <SidebarFooter>
-              {sidebarState !== 'collapsed' && (
-                <>
-                  <Separator className="my-2" />
-                  <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
-                      {isClient && (
-                          <WeeklySummary
-                              aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
-                              estimatedPrice={estimatedPrice}
-                              isLoadingPrice={isLoadingPrice}
-                              weekStartDate={currentWeekStartDate}
-                              title="本周食材汇总"
-                              totalEstimatedPriceLabel="预估总价"
-                              ingredientsListLabel="食材清单"
-                              noIngredientsMessage="本周计划中没有食材。"
-                              priceLoadingMessage="正在估算价格..."
-                              priceErrorMessage="无法估算价格。"
-                              quantityLabel="克"
-                              currencySymbol="¥"
-                              isSidebarCollapsed={sidebarState === 'collapsed'}
-                          />
-                      )}
-                  </ClientErrorBoundary>
-                </>
-              )}
+              {/* Footer is now empty as WeeklySummary was moved */}
             </SidebarFooter>
         </Sidebar>
 
@@ -908,7 +885,7 @@ function HomePageContent() {
         </Dialog>
 
 
-        <SidebarInset>
+        <SidebarInset> 
             <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center">
                 <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
                   <div className="flex items-center justify-center mb-6 w-full relative max-w-5xl">
@@ -929,7 +906,7 @@ function HomePageContent() {
                   </div>
                 </ClientErrorBoundary>
 
-                <div className="w-full space-y-8 max-w-5xl">
+                <div className="w-full space-y-8 max-w-5xl"> 
                   <ClientErrorBoundary fallback={<p className="text-red-500">周计划表加载失败。</p>}>
                     {isClient ? (
                       <WeeklyPlanner
@@ -955,32 +932,55 @@ function HomePageContent() {
                     )}
                   </ClientErrorBoundary>
 
-
-                  <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
-                    {isClient ? (
-                      <NutritionalAnalysis
-                        analysis={nutritionalAnalysis}
-                        isLoading={isLoadingAnalysis}
-                        weekStartDate={currentWeekStartDate}
-                        title="每周营养分析"
-                        descriptionPrefix="从"
-                        descriptionSuffix="开始的一周的见解（基于带成分的餐点）"
-                        overallBalanceLabel="整体平衡"
-                        macroRatioLabel="宏量营养素比例"
-                        suggestionsLabel="改进建议"
-                        breakdownLabel="已分析餐点细分"
-                        noAnalysisTitle="营养分析"
-                        noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。"
-                        noAnalysisData="无可用分析数据。"
-                        analysisFailed="无法生成营养见解。"
-                        noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。"
-                      />
-                    ) : (
-                      <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
-                        加载分析中...
-                      </div>
-                    )}
-                  </ClientErrorBoundary>
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-8 w-full">
+                    <div className="lg:col-span-3">
+                      <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
+                        {isClient ? (
+                          <NutritionalAnalysis
+                            analysis={nutritionalAnalysis}
+                            isLoading={isLoadingAnalysis}
+                            weekStartDate={currentWeekStartDate}
+                            title="每周营养分析"
+                            descriptionPrefix="从"
+                            descriptionSuffix="开始的一周的见解（基于带成分的餐点）"
+                            overallBalanceLabel="整体平衡"
+                            macroRatioLabel="宏量营养素比例"
+                            suggestionsLabel="改进建议"
+                            breakdownLabel="已分析餐点细分"
+                            noAnalysisTitle="营养分析"
+                            noAnalysisDescription="添加带成分的餐点，然后点击“分析营养”以查看见解。"
+                            noAnalysisData="无可用分析数据。"
+                            analysisFailed="无法生成营养见解。"
+                            noMealsAnalyzed="没有带有成分的餐点被分析以在图表中显示。"
+                          />
+                        ) : (
+                          <div className="w-full h-40 bg-muted rounded-md animate-pulse flex items-center justify-center">
+                            加载分析中...
+                          </div>
+                        )}
+                      </ClientErrorBoundary>
+                    </div>
+                    <div className="lg:col-span-2">
+                       <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
+                          {isClient && (
+                              <WeeklySummary
+                                  aggregatedIngredients={aggregatedIngredientsForCurrentWeek}
+                                  estimatedPrice={estimatedPrice}
+                                  isLoadingPrice={isLoadingPrice}
+                                  weekStartDate={currentWeekStartDate}
+                                  title="本周食材汇总"
+                                  totalEstimatedPriceLabel="预估总价"
+                                  ingredientsListLabel="食材清单"
+                                  noIngredientsMessage="本周计划中没有食材。"
+                                  priceLoadingMessage="正在估算价格..."
+                                  priceErrorMessage="无法估算价格。"
+                                  quantityLabel="克"
+                                  currencySymbol="¥"
+                              />
+                          )}
+                      </ClientErrorBoundary>
+                    </div>
+                  </div>
                 </div>
             </main>
         </SidebarInset>
@@ -992,8 +992,9 @@ function HomePageContent() {
 
 export default function Home() {
   return (
-    <SidebarProvider defaultOpen={false}> {/* Default to collapsed sidebar, works for all screen sizes */}
+    <SidebarProvider> 
       <HomePageContent />
     </SidebarProvider>
   );
 }
+    
