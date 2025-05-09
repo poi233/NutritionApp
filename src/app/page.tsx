@@ -166,7 +166,7 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState } = useSidebar();
+  const { state: sidebarState, isMobile } = useSidebar();
 
 
   useEffect(() => {
@@ -571,7 +571,7 @@ function HomePageContent() {
        const generationInput: GenerateWeeklyRecipesInput = {
          weekStartDate: currentWeekStartDate,
          dietaryNeeds: prefs.dietaryNeeds || "未指定",
-         preferences: prefs.preferences || "未指定",
+         preferences: prefs.preferences || "未指定, 偏爱中餐",
          previousWeekRecipes: previousWeekRecipesString,
          existingCurrentWeekRecipes: existingCurrentWeekRecipesString,
        };
@@ -640,7 +640,13 @@ function HomePageContent() {
 
           setWeeklyRecipes((prevWeekly) => {
              console.log(`Adding ${generatedToAdd.length} generated recipes to week:`, currentWeekStartDate);
-             const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
+             // Filter out any recipes that might conflict with existing ones for the same day/meal slot to avoid full replacement by AI
+             // This is a simple check; more sophisticated merging might be needed if AI is meant to *update* rather than just add.
+             const existingForWeek = prevWeekly[currentWeekStartDate] || [];
+             const newFiltered = generatedToAdd.filter(newR =>
+                 !existingForWeek.some(oldR => oldR.dayOfWeek === newR.dayOfWeek && oldR.mealType === newR.mealType && oldR.name === newR.name) // Basic check
+             );
+             const updatedWeek = [...existingForWeek, ...newFiltered];
              const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
              console.log("New weeklyRecipes state after generation:", newState);
              return newState;
@@ -730,16 +736,9 @@ function HomePageContent() {
     <>
        <div className="flex min-h-screen w-full">
         <Sidebar variant="sidebar" collapsible="icon" side="left" className="group fixed md:sticky top-0 z-20">
-            <SidebarHeader className="justify-between">
-                {/* Use SidebarTrigger for mobile, visible only on small screens */}
-                <SidebarTrigger className="md:hidden" />
-                
-                <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden md:group-data-[collapsible=icon]:flex">
-                  <Settings2 className="h-5 w-5" /> 操作面板
-                </h2>
-
-                {/* SidebarTrigger for desktop, hidden on small screens, handles collapsible icon state */}
-                <SidebarTrigger className="hidden md:flex group-data-[collapsible=icon]:ml-auto" />
+            <SidebarHeader className="flex flex-row items-center justify-start p-2">
+                <SidebarTrigger />
+                {/* Removed h2 "操作面板" as requested */}
             </SidebarHeader>
 
             <SidebarContent>
@@ -844,7 +843,8 @@ function HomePageContent() {
             </SidebarContent>
 
             <SidebarFooter>
-              {sidebarState !== 'collapsed' && (
+              {/* Conditional rendering based on sidebar state (expanded/collapsed) AND mobile view */}
+              {(!isMobile && sidebarState !== 'collapsed') && (
                 <>
                   <Separator className="my-2" />
                   <ClientErrorBoundary fallback={<p className="text-red-500">每周概要加载失败。</p>}>
@@ -897,7 +897,6 @@ function HomePageContent() {
                             placeholder="例如，喜欢辣的食物，偏爱中餐，不喜欢蘑菇"
                             value={generateDialogPreferences.preferences || ""}
                             onChange={(e) => setGenerateDialogPreferences(prev => ({ ...prev, preferences: e.target.value }))}
-                            className="w-full min-h-[60px]"
                             className="w-full min-h-[60px]"
                         />
                     </div>
