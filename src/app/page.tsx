@@ -32,7 +32,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added AlertDialogTrigger
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,7 +166,8 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState, setOpen: setSidebarOpen, open: isSidebarOpen } = useSidebar();
+  const { state: sidebarState } = useSidebar();
+
 
   useEffect(() => {
     console.log("HomePageContent component mounted on client.");
@@ -730,18 +731,14 @@ function HomePageContent() {
        <div className="flex min-h-screen w-full">
         <Sidebar variant="sidebar" collapsible="icon" side="left" className="group fixed md:sticky top-0 z-20">
             <SidebarHeader className="justify-between">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden"
-                    onClick={() => setSidebarOpen(!isSidebarOpen)}
-                    aria-label={isSidebarOpen ? "关闭侧边栏" : "打开侧边栏"}
-                >
-                    {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-                </Button>
-                <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+                {/* Use SidebarTrigger for mobile, visible only on small screens */}
+                <SidebarTrigger className="md:hidden" />
+                
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden md:group-data-[collapsible=icon]:flex">
                   <Settings2 className="h-5 w-5" /> 操作面板
                 </h2>
+
+                {/* SidebarTrigger for desktop, hidden on small screens, handles collapsible icon state */}
                 <SidebarTrigger className="hidden md:flex group-data-[collapsible=icon]:ml-auto" />
             </SidebarHeader>
 
@@ -901,6 +898,7 @@ function HomePageContent() {
                             value={generateDialogPreferences.preferences || ""}
                             onChange={(e) => setGenerateDialogPreferences(prev => ({ ...prev, preferences: e.target.value }))}
                             className="w-full min-h-[60px]"
+                            className="w-full min-h-[60px]"
                         />
                     </div>
                 </div>
@@ -917,9 +915,9 @@ function HomePageContent() {
 
 
         <SidebarInset>
-            <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center"> {/* Added flex flex-col items-center */}
+            <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center">
                 <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
-                  <div className="flex items-center justify-center mb-6 w-full relative max-w-5xl"> {/* Added max-w-5xl */}
+                  <div className="flex items-center justify-center mb-6 w-full relative max-w-5xl">
                     <div className="flex items-center justify-center flex-grow">
                       <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
                         <ArrowLeft className="h-5 w-5" />
@@ -937,7 +935,7 @@ function HomePageContent() {
                   </div>
                 </ClientErrorBoundary>
 
-                <div className="w-full space-y-8 max-w-5xl"> {/* Added max-w-5xl */}
+                <div className="w-full space-y-8 max-w-5xl">
                   <ClientErrorBoundary fallback={<p className="text-red-500">周计划表加载失败。</p>}>
                     {isClient ? (
                       <WeeklyPlanner
