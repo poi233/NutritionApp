@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -11,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Check, FileText } from "lucide-react"; // Removed Panel icons, added FileText
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Check, FileText, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
@@ -51,8 +50,11 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  // SidebarTrigger, // No longer used from here for main sidebar toggle
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 
 
 // Basic Error Boundary for client-side component errors
@@ -165,6 +167,8 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile(); // Hook to detect mobile state for sidebar
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile); // Sidebar open by default on desktop
 
 
   useEffect(() => {
@@ -173,7 +177,9 @@ function HomePageContent() {
     const initialWeekStart = getWeekStartDate(new Date());
     console.log("Setting initial week start date:", initialWeekStart);
     setCurrentWeekStartDate(initialWeekStart);
-  }, []);
+    setIsSidebarOpen(!isMobile); // Initialize based on initial mobile state
+  }, [isMobile]); // Add isMobile as dependency
+
 
   const currentWeekRecipes = useMemo(() => {
        if (!isClient) {
@@ -726,122 +732,143 @@ function HomePageContent() {
   };
 
 
-   console.log("Rendering HomePageContent component structure. isClient:", isClient);
+   console.log("Rendering HomePageContent component structure. isClient:", isClient, "isMobile:", isMobile, "isSidebarOpen:", isSidebarOpen);
+
+  const SidebarToggle = () => (
+    <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="fixed top-2 left-2 z-50 bg-card/80 hover:bg-card text-foreground md:hidden"
+        aria-label={isSidebarOpen ? "收起操作面板" : "展开操作面板"}
+    >
+        {isSidebarOpen ? <PanelLeftOpen /> : <PanelRightOpen />}
+    </Button>
+  );
 
   return (
     <>
+      {isMobile && <SidebarToggle />}
        <div className="flex min-h-screen w-full">
-         <Sidebar variant="sidebar" side="left" className="group md:sticky top-0 z-20"> 
-            <SidebarHeader>
-                <div className="p-2 h-8 flex items-center justify-center"> 
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-            </SidebarHeader>
-            
-            <SidebarContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                      <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
-                        <DialogTrigger asChild>
-                          <SidebarMenuButton
+         {isClient && (isSidebarOpen || !isMobile) && (
+             <Sidebar 
+                variant="sidebar" 
+                side="left" 
+                className="group md:sticky top-0 z-20"
+                // Control visibility explicitly based on state and isMobile
+                // style={{ display: (isSidebarOpen || !isMobile) ? 'block' : 'none' }}
+              > 
+                <SidebarHeader>
+                    <div className="p-2 h-8 flex items-center justify-center"> 
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                     {/* Removed the trigger button from here */}
+                </SidebarHeader>
+                
+                <SidebarContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                          <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
+                            <DialogTrigger asChild>
+                              <SidebarMenuButton
+                                variant="default"
+                                tooltip="手动添加餐点"
+                                aria-label="手动添加餐点"
+                                disabled={!isClient}
+                              >
+                                <PlusSquare />
+                              </SidebarMenuButton>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>添加新餐点</DialogTitle>
+                                <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
+                              </DialogHeader>
+                              <RecipeInputForm
+                                onAddRecipe={handleAddRecipe}
+                                onCloseDialog={() => setIsAddRecipeDialogOpen(false)}
+                                currentWeekStartDate={currentWeekStartDate}
+                                daysOfWeek={daysOfWeek}
+                                mealTypes={mealTypes}
+                                addMealTitle="添加餐点，为"
+                                recipeNameLabel="食谱/餐点名称 *"
+                                recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
+                                dayOfWeekLabel="星期 *"
+                                dayOfWeekPlaceholder="选择日期"
+                                mealTypeLabel="餐别 *"
+                                mealTypePlaceholder="选择餐别"
+                                descriptionLabel="描述（可选）"
+                                descriptionPlaceholder="例如，快速简单的早餐..."
+                                ingredientsLabel="成分（用于营养估算，可选）"
+                                ingredientNamePlaceholder="成分名称"
+                                quantityPlaceholder="数量 (克)"
+                                addIngredientLabel="添加成分行"
+                                submitButtonLabel="添加餐点"
+                                autoFillDetailsLabel="智能填充详情"
+                              />
+                            </DialogContent>
+                          </Dialog>
+                      </SidebarMenuItem>
+
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                            onClick={triggerAnalysis}
+                            disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
                             variant="default"
-                            tooltip="手动添加餐点"
-                            disabled={!isClient}
+                            tooltip="分析营养"
+                            aria-label="分析营养"
                           >
-                            <PlusSquare />
-                            {/* Text span will be hidden by SidebarMenuButton's internal styling for icon-only mode */}
-                            <span>手动添加餐点</span>
-                          </SidebarMenuButton>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>添加新餐点</DialogTitle>
-                            <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
-                          </DialogHeader>
-                          <RecipeInputForm
-                            onAddRecipe={handleAddRecipe}
-                            onCloseDialog={() => setIsAddRecipeDialogOpen(false)}
-                            currentWeekStartDate={currentWeekStartDate}
-                            daysOfWeek={daysOfWeek}
-                            mealTypes={mealTypes}
-                            addMealTitle="添加餐点，为"
-                            recipeNameLabel="食谱/餐点名称 *"
-                            recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
-                            dayOfWeekLabel="星期 *"
-                            dayOfWeekPlaceholder="选择日期"
-                            mealTypeLabel="餐别 *"
-                            mealTypePlaceholder="选择餐别"
-                            descriptionLabel="描述（可选）"
-                            descriptionPlaceholder="例如，快速简单的早餐..."
-                            ingredientsLabel="成分（用于营养估算，可选）"
-                            ingredientNamePlaceholder="成分名称"
-                            quantityPlaceholder="数量 (克)"
-                            addIngredientLabel="添加成分行"
-                            submitButtonLabel="添加餐点"
-                            autoFillDetailsLabel="智能填充详情"
-                          />
-                        </DialogContent>
-                      </Dialog>
-                  </SidebarMenuItem>
+                            {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
 
-                  <SidebarMenuItem>
-                     <SidebarMenuButton
-                         onClick={triggerAnalysis}
-                         disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
-                         variant="default"
-                         tooltip="分析营养"
-                      >
-                        {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
-                         <span>分析营养</span>
-                     </SidebarMenuButton>
-                  </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                            onClick={openGeneratePreferencesDialog}
+                            disabled={!isClient || isLoadingGeneration}
+                            variant="default"
+                            tooltip="生成餐点建议"
+                            aria-label="生成餐点建议"
+                          >
+                            {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
 
-                  <SidebarMenuItem>
-                     <SidebarMenuButton
-                         onClick={openGeneratePreferencesDialog}
-                         disabled={!isClient || isLoadingGeneration}
-                         variant="default"
-                         tooltip="生成餐点建议"
-                      >
-                        {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
-                         <span>生成餐点建议</span>
-                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                   <SidebarMenuItem>
-                      <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
-                         <AlertDialogTrigger asChild>
-                          <SidebarMenuButton
-                            variant="destructive"
-                            disabled={!isClient || currentWeekRecipes.length === 0}
-                            tooltip="移除所有餐点"
-                           >
-                            <Trash2 />
-                             <span>移除所有餐点</span>
-                          </SidebarMenuButton>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>您确定吗？</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              此操作无法撤销。这将永久删除从 {isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有已计划餐点。
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>取消</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleRemoveAllRecipes}>
-                              继续
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                   </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarContent>
-            <SidebarFooter>
-              {/* Footer is now empty as WeeklySummary was moved */}
-            </SidebarFooter>
-        </Sidebar>
+                      <SidebarMenuItem>
+                          <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
+                            <AlertDialogTrigger asChild>
+                              <SidebarMenuButton
+                                variant="destructive"
+                                disabled={!isClient || currentWeekRecipes.length === 0}
+                                tooltip="移除所有餐点"
+                                aria-label="移除所有餐点"
+                              >
+                                <Trash2 />
+                              </SidebarMenuButton>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>您确定吗？</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  此操作无法撤销。这将永久删除从 {isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有已计划餐点。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setIsClearWeekDialogOpen(false)}>取消</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleRemoveAllRecipes}>
+                                  继续
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarContent>
+                <SidebarFooter>
+                  {/* Footer is now empty as WeeklySummary was moved */}
+                </SidebarFooter>
+            </Sidebar>
+         )}
 
         <Dialog open={isGeneratePreferencesDialogOpen} onOpenChange={setIsGeneratePreferencesDialogOpen}>
             <DialogContent className="sm:max-w-md">
@@ -886,7 +913,7 @@ function HomePageContent() {
 
 
         <SidebarInset> 
-            <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center">
+             <main className="flex-1 py-4 px-2 md:px-4 lg:px-6 overflow-y-auto w-full flex flex-col items-center"> {/* items-center to center content */}
                 <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
                   <div className="flex items-center justify-center mb-6 w-full relative max-w-5xl">
                     <div className="flex items-center justify-center flex-grow">
@@ -985,6 +1012,117 @@ function HomePageContent() {
             </main>
         </SidebarInset>
        </div>
+       {/* Mobile Sheet for Sidebar Content */}
+        {isClient && isMobile && (
+             <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+                {/* SheetTrigger is handled by the floating SidebarToggle button */}
+                <SheetContent side="left" className="p-0 w-[280px] bg-sidebar text-sidebar-foreground flex flex-col">
+                    <SheetHeader className="p-2 border-b border-sidebar-border">
+                        <div className="flex items-center justify-between">
+                            <SheetTitle className="text-lg font-semibold flex items-center">
+                                <FileText className="h-5 w-5 text-primary mr-2" />
+                                操作面板
+                            </SheetTitle>
+                            <SheetClose asChild>
+                                <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent">
+                                    <X className="h-5 w-5" />
+                                </Button>
+                            </SheetClose>
+                        </div>
+                    </SheetHeader>
+                    <ScrollArea className="flex-grow">
+                        <SidebarContent className="pt-2">
+                            <SidebarMenu>
+                                <SidebarMenuItem>
+                                    <Dialog open={isAddRecipeDialogOpen} onOpenChange={(open) => { setIsAddRecipeDialogOpen(open); if (!open) setIsSidebarOpen(false); }}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                                                <PlusSquare className="mr-2 h-5 w-5" /> 手动添加餐点
+                                            </Button>
+                                        </DialogTrigger>
+                                         <DialogContent className="sm:max-w-[425px] md:max-w-lg max-h-[90vh] overflow-y-auto">
+                                            <DialogHeader>
+                                                <DialogTitle>添加新餐点</DialogTitle>
+                                                <DialogDescription>在此窗口中添加多个餐点。添加后，表单将清空以供下次输入。</DialogDescription>
+                                            </DialogHeader>
+                                            <RecipeInputForm
+                                                onAddRecipe={(data) => { handleAddRecipe(data); /* setIsSidebarOpen(false); */ }} // Keep sidebar open on mobile after adding
+                                                onCloseDialog={() => { setIsAddRecipeDialogOpen(false); /* setIsSidebarOpen(false); */}}
+                                                currentWeekStartDate={currentWeekStartDate}
+                                                daysOfWeek={daysOfWeek}
+                                                mealTypes={mealTypes}
+                                                addMealTitle="添加餐点，为"
+                                                recipeNameLabel="食谱/餐点名称 *"
+                                                recipeNamePlaceholder="例如，炒鸡蛋，鸡肉沙拉"
+                                                dayOfWeekLabel="星期 *"
+                                                dayOfWeekPlaceholder="选择日期"
+                                                mealTypeLabel="餐别 *"
+                                                mealTypePlaceholder="选择餐别"
+                                                descriptionLabel="描述（可选）"
+                                                descriptionPlaceholder="例如，快速简单的早餐..."
+                                                ingredientsLabel="成分（用于营养估算，可选）"
+                                                ingredientNamePlaceholder="成分名称"
+                                                quantityPlaceholder="数量 (克)"
+                                                addIngredientLabel="添加成分行"
+                                                submitButtonLabel="添加餐点"
+                                                autoFillDetailsLabel="智能填充详情"
+                                            />
+                                        </DialogContent>
+                                    </Dialog>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <Button 
+                                        variant="ghost" 
+                                        className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                        onClick={() => { triggerAnalysis(); setIsSidebarOpen(false); }}
+                                        disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
+                                    >
+                                        {isLoadingAnalysis ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <ListChecks className="mr-2 h-5 w-5" />} 分析营养
+                                    </Button>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <Button 
+                                        variant="ghost" 
+                                        className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                        onClick={() => { openGeneratePreferencesDialog(); /* Don't close sidebar yet, dialog will open */ }}
+                                        disabled={!isClient || isLoadingGeneration}
+                                    >
+                                        {isLoadingGeneration ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <ChefHat className="mr-2 h-5 w-5" />} 生成餐点建议
+                                    </Button>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                     <AlertDialog open={isClearWeekDialogOpen} onOpenChange={(open) => { setIsClearWeekDialogOpen(open); if (!open && !isAddRecipeDialogOpen && !isGeneratePreferencesDialogOpen) setIsSidebarOpen(false);}}>
+                                        <AlertDialogTrigger asChild>
+                                            <Button 
+                                                variant="ghost" 
+                                                className="w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive-foreground"
+                                                disabled={!isClient || currentWeekRecipes.length === 0}
+                                            >
+                                                <Trash2 className="mr-2 h-5 w-5" /> 移除所有餐点
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>您确定吗？</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                            此操作无法撤销。这将永久删除从 {isClient ? format(parseISO(currentWeekStartDate), 'MMM d', { locale: zhCN }) : '本周'} 开始的一周的所有已计划餐点。
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel onClick={() => { setIsClearWeekDialogOpen(false); setIsSidebarOpen(false);}}>取消</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => { handleRemoveAllRecipes(); setIsSidebarOpen(false);}}>
+                                            继续
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+                        </SidebarContent>
+                    </ScrollArea>
+                </SheetContent>
+            </Sheet>
+        )}
     </>
   );
 }
@@ -992,6 +1130,7 @@ function HomePageContent() {
 
 export default function Home() {
   return (
+    // SidebarProvider defaultOpen is managed internally by HomePageContent now
     <SidebarProvider> 
       <HomePageContent />
     </SidebarProvider>
