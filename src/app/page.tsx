@@ -8,6 +8,7 @@ import { NutritionalAnalysis } from "@/components/nutritional-analysis";
 import { WeeklySummary } from "@/components/weekly-summary";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { getAllRecipes as dbGetAllRecipes, addRecipe as dbAddRecipe, deleteRecipe as dbDeleteRecipe, updateRecipe as dbUpdateRecipe, deleteRecipesByWeekStartDate as dbDeleteRecipesByWeekStartDate } from "../services/recipeService"; // Renamed to avoid potential naming conflicts
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
 import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Check, FileText, PanelLeftOpen, PanelRightOpen, X } from "lucide-react";
@@ -240,29 +241,116 @@ function HomePageContent() {
   }, [aggregatedIngredientsForCurrentWeek, isClient, toast]);
 
 
-   useEffect(() => {
-     if (isClient) {
-        console.log("Attempting to load data from localStorage.");
-       try {
-         const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
-         if (storedWeeklyRecipes) {
-            const parsedRecipes = JSON.parse(storedWeeklyRecipes);
-            console.log("Loaded weekly recipes from localStorage:", parsedRecipes);
-           setWeeklyRecipes(parsedRecipes);
-         } else {
-             console.log("No weekly recipes found in localStorage.");
-         }
-          setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
-       } catch (error) {
-         console.error("从 localStorage 加载数据时出错:", error);
-         toast({
-           title: "加载数据出错",
-           description: "无法加载已保存的计划。",
-           variant: "destructive",
-         });
-       }
-     }
-   }, [isClient, toast]);
+     useEffect(() => {
+    if (isClient) {
+      console.log("Attempting to load recipes from database.");
+      const loadRecipes = async () => {
+        try {
+          const allDbRecipes = await dbGetAllRecipes();
+          console.log("Loaded recipes from database:", allDbRecipes);
+          // Group recipes by weekStartDate for the weeklyRecipes state
+          const recipesByWeek: { [weekStartDate: string]: Recipe[] } = {};
+          allDbRecipes.forEach(recipe => {
+            const weekKey = recipe.weekStartDate || getWeekStartDate(new Date()); // Fallback if weekStartDate is missing
+            if (!recipesByWeek[weekKey]) {
+              recipesByWeek[weekKey] = [];
+            }
+            recipesByWeek[weekKey].push(recipe);
+          });
+          setWeeklyRecipes(recipesByWeek);
+        } catch (error) {
+          console.error("从数据库加载菜谱时出错:", error);
+          toast({
+            title: "加载菜谱出错",
+            description: "无法从数据库加载已保存的菜谱计划。",
+            variant: "destructive",
+          });
+        }
+      };
+      loadRecipes();
+      // Keep preferences loading separate if needed, or integrate if it also moves to DB
+      try {
+        const storedPrefs = localStorage.getItem("nutrijournal_user_preferences");
+        if (storedPrefs) {
+            setGenerateDialogPreferences(JSON.parse(storedPrefs));
+        } else {
+            setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
+        }
+      } catch (prefError) {
+        console.error("加载用户偏好时出错:", prefError);
+        // Optionally toast for preference loading error too
+      }
+    }
+  }, [isClient, toast]);
+
+  useEffect(() => {
+    const syncCurrentWeekRecipesToDb = async () => {
+      if (isClient && currentWeekStartDate && weeklyRecipes[currentWeekStartDate]) {
+        const recipesToSave = weeklyRecipes[currentWeekStartDate];
+        console.log(`Syncing recipes for ${currentWeekStartDate} to DB. Recipes count: ${recipesToSave.length}`);
+        toast({
+          title: "正在同步食谱...",
+          description: `正在将 ${currentWeekStartDate} 的食谱保存到数据库。`,
+        });
+        try {
+          // Delete all recipes for the current week first
+          await dbDeleteRecipesByWeekStartDate(currentWeekStartDate);
+          console.log(`Successfully deleted recipes for week ${currentWeekStartDate} from DB.`);
+
+          // Then add all current recipes for that week
+          // We use a for...of loop with await to ensure sequential addition,
+          // as addRecipe is async and involves multiple DB operations.
+          for (const recipe of recipesToSave) {
+            await dbAddRecipe(recipe);
+          }
+          console.log(`Successfully added ${recipesToSave.length} recipes for week ${currentWeekStartDate} to DB.`);
+          toast({
+            title: "同步成功",
+            description: `${currentWeekStartDate} 的食谱已成功保存到数据库。`,
+            variant: "default",
+          });
+        } catch (error) {
+          console.error("将每周食谱同步到数据库时出错:", error);
+          toast({
+            title: "同步失败",
+            description: `保存 ${currentWeekStartDate} 的食谱到数据库时出错: ${(error as Error).message}`,
+            variant: "destructive",
+          });
+        }
+      } else if (isClient && currentWeekStartDate && (!weeklyRecipes[currentWeekStartDate] || weeklyRecipes[currentWeekStartDate].length === 0)) {
+        // If there are no recipes for the current week in the state, ensure they are also deleted from DB
+        console.log(`No recipes in state for ${currentWeekStartDate}, ensuring DB is clear for this week.`);
+        try {
+          await dbDeleteRecipesByWeekStartDate(currentWeekStartDate);
+          console.log(`Successfully ensured no recipes for week ${currentWeekStartDate} in DB.`);
+          // Optionally, add a toast here if you want to notify about clearing
+        } catch (error) {
+          console.error(`清理数据库中 ${currentWeekStartDate} 的食谱时出错:`, error);
+          toast({
+            title: "清理失败",
+            description: `清理数据库中 ${currentWeekStartDate} 的食谱时出错: ${(error as Error).message}`,
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    // We need a way to prevent this from running on the initial load of weeklyRecipes from DB,
+    // otherwise, it will immediately try to write back what it just read.
+    // This is a common challenge with useEffect for synchronization.
+    // A simple way is to use a ref to track if it's the initial load for currentWeekStartDate's recipes.
+    // However, since weeklyRecipes as a whole is a dependency, this needs careful handling.
+    // For now, this will run whenever weeklyRecipes[currentWeekStartDate] changes.
+    // Consider adding a more sophisticated check if this causes issues (e.g., double writes).
+    
+    // A simple debounce could also be helpful if changes are too frequent.
+    const handler = setTimeout(() => {
+      syncCurrentWeekRecipesToDb();
+    }, 1000); // Debounce for 1 second
+
+    return () => clearTimeout(handler);
+
+  }, [weeklyRecipes, currentWeekStartDate, isClient, toast]);
 
 
   useEffect(() => {
@@ -270,11 +358,9 @@ function HomePageContent() {
         console.log("Weekly recipes changed, attempting to save to localStorage:", weeklyRecipes);
        try {
           if (Object.keys(weeklyRecipes).length > 0) {
-             localStorage.setItem("nutrijournal_weekly_recipes", JSON.stringify(weeklyRecipes));
-             console.log("Saved weekly recipes to localStorage.");
+             // Removed code to save to localStorage
            } else {
-              localStorage.removeItem("nutrijournal_weekly_recipes");
-              console.log("Removed weekly recipes from localStorage (object was empty).");
+              // Removed code to remove from localStorage
            }
        } catch (error) {
           console.error("将每周食谱保存到 localStorage 时出错:", error);
