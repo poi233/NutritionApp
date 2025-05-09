@@ -82,7 +82,9 @@ const SidebarProvider = React.forwardRef<
         } else {
           _setOpen(openState)
         }
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+        if (typeof document !== 'undefined') { // Check for document for SSR
+          document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+        }
       },
       [setOpenProp, open]
     )
@@ -96,18 +98,20 @@ const SidebarProvider = React.forwardRef<
     }, [setOpen, isMobileHookValue, setOpenMobile])
 
     React.useEffect(() => {
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (
-          event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-          (event.metaKey || event.ctrlKey)
-        ) {
-          event.preventDefault()
-          toggleSidebar()
+      if (typeof window !== 'undefined') { // Check for window for SSR
+        const handleKeyDown = (event: KeyboardEvent) => {
+          if (
+            event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+            (event.metaKey || event.ctrlKey)
+          ) {
+            event.preventDefault()
+            toggleSidebar()
+          }
         }
-      }
 
-      window.addEventListener("keydown", handleKeyDown)
-      return () => window.removeEventListener("keydown", handleKeyDown)
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+      }
     }, [toggleSidebar])
 
     const state = open ? "expanded" : "collapsed"
@@ -158,8 +162,8 @@ const Sidebar = React.forwardRef<
   React.ComponentProps<"div"> & {
     side?: "left" | "right" 
     variant?: "sidebar" | "floating" | "inset"
-    collapsible?: "icon" | "none" // Removed 'offcanvas' as it's handled by Sheet
-    className?: string; // Added className to props
+    collapsible?: "icon" | "none" 
+    className?: string;
   }
 >(
   (
@@ -178,16 +182,16 @@ const Sidebar = React.forwardRef<
     if (isMobile) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-          {/* SheetTrigger is handled externally now or via programmatic control */}
+          {/* The actual <SheetTrigger> is now expected to be rendered externally for mobile */}
           <SheetContent side={side} className={cn("w-[var(--sidebar-width)] p-0", className)} {...props}>
-             <SheetHeader className="sr-only"> {/* Added for accessibility */}
+             <SheetHeader className="sr-only"> 
                 <SheetTitle>操作面板</SheetTitle>
              </SheetHeader>
             <div
-              data-sidebar="sidebar" // Keep for styling consistency if needed
+              data-sidebar="sidebar"
               className="flex h-full w-full flex-col bg-sidebar"
             >
-              {children}
+              {children} {/* SidebarHeader, SidebarContent, SidebarFooter passed as children will be inside SheetContent */}
             </div>
           </SheetContent>
         </Sheet>
@@ -198,7 +202,7 @@ const Sidebar = React.forwardRef<
     return (
       <div
         ref={ref}
-        className={cn("group peer text-sidebar-foreground", className)} // Removed hidden md:block
+        className={cn("group peer text-sidebar-foreground md:block", className, isMobile ? "hidden" : "block")} // Ensure hidden on mobile, block on md+
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
@@ -221,7 +225,7 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            "duration-200 fixed inset-y-0 z-10 h-svh transition-[left,right,width] ease-linear flex", // Added flex
+            "duration-200 fixed inset-y-0 z-10 h-svh transition-[left,right,width] ease-linear flex", 
              collapsible === 'icon' && state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]", 
             side === "left"
               ? "left-0"
@@ -255,11 +259,16 @@ const SidebarTrigger = React.forwardRef<
 >(({ className, onClick, ...props }, ref) => {
   const { toggleSidebar, side, state, isMobile, openMobile } = useSidebar()
 
-  const Icon = isMobile 
-    ? (openMobile ? (side === "left" ? PanelLeftClose : PanelRight) : (side === "left" ? PanelLeftOpen : PanelRight))
-    : (state === 'expanded' ? (side === "left" ? PanelLeftClose : PanelRight) : (side === "left" ? PanelLeftOpen : PanelRight));
+  // This trigger component is now primarily for desktop.
+  // Mobile trigger will be handled separately in page.tsx.
+  // So, icon logic should focus on desktop state.
+  const Icon = state === 'expanded' 
+    ? (side === "left" ? PanelLeftClose : PanelRight) 
+    : (side === "left" ? PanelLeftOpen : PanelRight);
 
-
+  // This trigger should not be rendered on mobile if the mobile trigger is handled externally.
+  // However, if it *is* rendered (e.g. if page.tsx logic changes), it should still function.
+  // Forcing visibility for desktop and ensuring it calls toggleSidebar.
   return (
     <Button
       ref={ref}
@@ -268,17 +277,17 @@ const SidebarTrigger = React.forwardRef<
       size="icon" 
       className={cn(
          "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center",
-        //  "group-data-[state=collapsed]/sidebar-wrapper:ml-auto", // This might be causing issues with always visible trigger
          className
         )}
       onClick={(event) => {
         onClick?.(event)
-        toggleSidebar()
+        toggleSidebar() // This will correctly toggle mobile sheet or desktop sidebar
       }}
       {...props}
     >
       <Icon />
       <span className="sr-only">
+        {/* Label reflects current context (desktop state or mobile state) */}
         {isMobile 
           ? (openMobile ? '收起侧边栏' : '展开侧边栏') 
           : (state === 'expanded' ? '收起侧边栏' : '展开侧边栏')}
@@ -320,16 +329,22 @@ const SidebarInset = React.forwardRef<
   HTMLMainElement, 
   React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
-  const { state, side, isMobile } = useSidebar(); 
+  const { state, side, isMobile, openMobile } = useSidebar(); 
 
   return (
     <main 
       ref={ref}
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background transition-[padding-left,padding-right] duration-200 ease-linear", 
+        // Apply padding based on desktop sidebar state
         !isMobile && state === 'expanded' && (side === 'left' ? "pl-[var(--sidebar-width)]" : "pr-[var(--sidebar-width)]"),
         !isMobile && state === 'collapsed' && (side === 'left' ? "pl-[var(--sidebar-width-icon)]" : "pr-[var(--sidebar-width-icon)]"),
         
+        // Mobile padding: if sidebar (Sheet) is open, add padding to avoid content overlap IF the sheet is not an overlay
+        // However, Sheet is typically an overlay. If main content needs to shift, this logic might be needed.
+        // For now, assuming Sheet overlays and main content doesn't need to shift based on mobile sidebar.
+        // isMobile && openMobile && (side === 'left' ? "pl-[var(--sidebar-width)]" : "pr-[var(--sidebar-width)]"), // Example if needed
+
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))]",
         "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         !isMobile && state === 'collapsed' && (side === 'left' ? "md:peer-data-[variant=inset]:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]" : "md:peer-data-[variant=inset]:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"),
@@ -367,7 +382,7 @@ const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex flex-col gap-2 p-2 items-center", className)}
+      className={cn("flex flex-col gap-2 p-2 items-center", className)} // Kept items-center for desktop trigger centering.
       {...props}
     />
   )
@@ -770,4 +785,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
 

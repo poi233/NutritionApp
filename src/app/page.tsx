@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeNutritionalBalance, type AnalyzeNutritionalBalanceOutput, type AnalyzeNutritionalBalanceInput } from "@/ai/flows/analyze-nutritional-balance";
 import { generateWeeklyRecipes, type GenerateWeeklyRecipesOutput, type GenerateWeeklyRecipesInput } from "@/ai/flows/generate-weekly-recipes";
-import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Settings2, Check, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChefHat, ListChecks, RefreshCw, Calendar, ArrowLeft, ArrowRight, PlusSquare, AlertTriangle, Trash2, Settings2, Check, PanelLeftClose, PanelLeftOpen, PanelRight } from "lucide-react";
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
@@ -32,8 +32,9 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+    // AlertDialogTrigger, // This was an unused import, and if used without Dialog wrapper, would cause error
+} from "@/components/ui/alert-dialog"; // Keep AlertDialogTrigger if it's used within an AlertDialog, otherwise remove.
+import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog"; // Explicit import for AlertDialogTrigger if needed as standalone
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -166,7 +167,7 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState, isMobile } = useSidebar();
+  const { state: sidebarState, isMobile, openMobile, toggleSidebar, side } = useSidebar();
 
 
   useEffect(() => {
@@ -640,11 +641,9 @@ function HomePageContent() {
 
           setWeeklyRecipes((prevWeekly) => {
              console.log(`Adding ${generatedToAdd.length} generated recipes to week:`, currentWeekStartDate);
-             // Filter out any recipes that might conflict with existing ones for the same day/meal slot to avoid full replacement by AI
-             // This is a simple check; more sophisticated merging might be needed if AI is meant to *update* rather than just add.
              const existingForWeek = prevWeekly[currentWeekStartDate] || [];
              const newFiltered = generatedToAdd.filter(newR =>
-                 !existingForWeek.some(oldR => oldR.dayOfWeek === newR.dayOfWeek && oldR.mealType === newR.mealType && oldR.name === newR.name) // Basic check
+                 !existingForWeek.some(oldR => oldR.dayOfWeek === newR.dayOfWeek && oldR.mealType === newR.mealType && oldR.name === newR.name)
              );
              const updatedWeek = [...existingForWeek, ...newFiltered];
              const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
@@ -731,16 +730,45 @@ function HomePageContent() {
 
    console.log("Rendering HomePageContent component structure. isClient:", isClient);
 
+   const MobileTriggerIcon = openMobile
+    ? (side === "left" ? PanelLeftClose : PanelRight)
+    : (side === "left" ? PanelLeftOpen : PanelRight);
+
 
   return (
     <>
-       <div className="flex min-h-screen w-full">
-        <Sidebar variant="sidebar" collapsible="icon" side="left" className="group fixed md:sticky top-0 z-20">
-            <SidebarHeader className="flex flex-row items-center justify-start p-2">
-                <SidebarTrigger />
-                {/* Removed h2 "操作面板" as requested */}
-            </SidebarHeader>
+       {/* Mobile-only trigger, fixed position. This button will toggle the Sheet. */}
+       {isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="fixed top-4 left-4 z-[60] md:hidden bg-background/80 hover:bg-background border shadow-lg p-1.5"
+          onClick={toggleSidebar}
+          aria-label={openMobile ? '收起侧边栏' : '展开侧边栏'}
+        >
+          <MobileTriggerIcon className="h-5 w-5" />
+        </Button>
+      )}
 
+       <div className="flex min-h-screen w-full">
+         {/* Sidebar component: On mobile, this becomes a Sheet. */}
+         <Sidebar variant="sidebar" collapsible="icon" side="left" className="group md:sticky top-0 z-20"> {/* Desktop: sticky, Mobile: Sheet controls position */}
+            
+            {/* Desktop-only trigger inside SidebarHeader */}
+            {!isMobile && (
+              <SidebarHeader className="flex flex-row items-center justify-start p-2">
+                <SidebarTrigger /> {/* This is the trigger from ui/sidebar.tsx, used for desktop */}
+              </SidebarHeader>
+            )}
+
+            {/* Optional: If you want a specific header inside the mobile Sheet when it's open */}
+            {isMobile && (
+                <SidebarHeader className="flex flex-row items-center justify-between p-2 border-b md:hidden">
+                    <span className="text-sm font-semibold text-sidebar-foreground">操作</span>
+                    {/* The SheetContent itself includes an X close button by default */}
+                </SidebarHeader>
+            )}
+            
             <SidebarContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
