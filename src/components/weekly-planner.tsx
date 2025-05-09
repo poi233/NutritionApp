@@ -59,14 +59,13 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
   };
 
   return (
-    // Removed w-full to allow natural table width centering via parent mx-auto
-    <Table className="border shadow-md rounded-md overflow-hidden table-fixed">
+    <Table className="border shadow-md rounded-md overflow-hidden table-fixed mx-auto w-max"> {/* Added w-max for proper centering */}
       <TableHeader>
         <TableRow className="bg-muted/50 hover:bg-muted/50">
            {/* Adjust widths to make table narrower */}
           <TableHead className="sticky left-0 bg-muted/50 z-10 w-[70px] min-w-[70px] font-semibold text-foreground text-center">日期</TableHead>
           {mealTypes.map(meal => (
-            <TableHead key={meal} className="w-[140px] min-w-[140px] font-semibold text-center text-foreground"> {/* Reduced width */}
+            <TableHead key={meal} className="w-[120px] min-w-[120px] font-semibold text-center text-foreground"> {/* Reduced width */}
               {meal}
             </TableHead>
           ))}
@@ -75,35 +74,32 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
       <TableBody>
         {daysOfWeek.map(day => (
           <TableRow key={day}>
-            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[80px]"> {/* Reduced min-h */}
+            <TableCell className="sticky left-0 bg-background z-10 font-semibold text-center align-top min-h-[60px]"> {/* Reduced min-h */}
               {day}
             </TableCell>
             {mealTypes.map(meal => {
               const slotRecipes = getRecipesForSlot(day, meal);
               const totalRecipesInSlot = slotRecipes.length;
               return (
-                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[80px] relative"> {/* Add relative positioning back */}
+                 <TableCell key={`${day}-${meal}`} className="p-1 align-top min-h-[60px] relative"> {/* Add relative positioning back, reduced min-h */}
                   {/* Use simple vertical spacing instead of negative margin stacking */}
                   <div className="space-y-1">
                      {totalRecipesInSlot > 0 ? (
                        slotRecipes.map((recipe, index) => (
                           <Card
                             key={recipe.id}
-                             // Ensure card has position relative for absolute positioning of footer if needed, but flex should work
-                            className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 w-full overflow-hidden min-h-[50px] z-0 hover:z-10" // Adjusted min-h
+                            className="flex flex-col bg-card shadow-sm hover:shadow-md transition-shadow duration-200 w-full overflow-hidden min-h-[40px] z-0 hover:z-10" // Adjusted min-h
                           >
-                            <CardHeader className="p-1.5 pb-0 flex-shrink-0"> {/* Removed flex-row, let title take full width */}
+                            <CardHeader className="p-1.5 pb-0 flex-shrink-0">
                               <CardTitle className="text-[10px] font-medium leading-tight truncate" title={recipe.name}>
                                  {totalRecipesInSlot > 1 ? `${index + 1}. ` : ''}{recipe.name}
                               </CardTitle>
                             </CardHeader>
-                             {/* Optional Content area if needed */}
                              {recipe.calories !== undefined && (
                                  <CardContent className="p-1.5 pt-0.5 text-[9px] text-muted-foreground flex-grow">
-                                     {recipe.calories?.toFixed(0)} {caloriesLabel} (估) {/* Shorthand */}
+                                     {recipe.calories?.toFixed(0)} {caloriesLabel} (估)
                                 </CardContent>
                              )}
-                             {/* Move buttons to CardFooter */}
                              <CardFooter className="p-1.5 pt-1 flex items-center justify-end space-x-1 mt-auto flex-shrink-0">
                                  {(recipe.description || recipe.calories !== undefined || (recipe.ingredients && recipe.ingredients.length > 0)) && (
                                      <Popover>
@@ -150,7 +146,7 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
                           </Card>
                         ))
                      ) : (
-                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground min-h-[80px]">
+                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground min-h-[60px]"> {/* Reduced min-h */}
                           {emptyLabel}
                        </div>
                      )}
@@ -164,4 +160,3 @@ export const WeeklyPlanner: FC<WeeklyPlannerProps> = ({
     </Table>
   );
 };
-
