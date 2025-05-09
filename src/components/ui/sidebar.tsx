@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet" // Added SheetTitle
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -208,6 +208,8 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
+            {/* Add a visually hidden title for accessibility */}
+             <SheetTitle className="sr-only">侧边栏菜单</SheetTitle>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>
@@ -284,7 +286,7 @@ const SidebarTrigger = React.forwardRef<
       variant="ghost"
       size="icon" // Use standard icon size
       className={cn(
-         "size-8 p-2 data-[state=open]:bg-sidebar-accent", // Use size-8 and p-2 consistently
+         "size-8 p-1.5 data-[state=open]:bg-sidebar-accent flex items-center justify-center", // Use size-8 and p-1.5 consistently, added flex for centering
          className
         )}
       onClick={(event) => {
@@ -294,7 +296,7 @@ const SidebarTrigger = React.forwardRef<
       {...props}
     >
       <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">切换侧边栏</span>
     </Button>
   )
 })
@@ -330,8 +332,8 @@ const SidebarRail = React.forwardRef<
 SidebarRail.displayName = "SidebarRail"
 
 const SidebarInset = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<"main"> // Changed from HTMLDivElement to main for semantic HTML
+  HTMLMainElement, // Changed from HTMLDivElement to main for semantic HTML
+  React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
   const { state, isMobile } = useSidebar(); // Get sidebar state and mobile status
 
@@ -339,7 +341,7 @@ const SidebarInset = React.forwardRef<
     <main // Use main tag
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-background transition-[padding-left,padding-right] duration-200 ease-linear", // Added transition
+        "relative flex min-h-svh flex-1 flex-col items-center bg-background transition-[padding-left,padding-right] duration-200 ease-linear", // Added items-center
         // Adjustments for when the sidebar is collapsed/inset
          !isMobile && state === 'expanded' ? "peer-data-[side=left]:pl-[--sidebar-width] peer-data-[side=right]:pr-[--sidebar-width]" : "", // Expanded padding
          !isMobile && state === 'collapsed' ? "peer-data-[side=left]:pl-[--sidebar-width-icon] peer-data-[side=right]:pr-[--sidebar-width-icon]" : "", // Collapsed padding
@@ -536,7 +538,7 @@ const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:justify-center [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0", // Added justify-center when collapsed
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-1.5 group-data-[collapsible=icon]:justify-center [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0", // Added justify-center when collapsed, changed p-2 to p-1.5 for collapsed
   {
     variants: {
       variant: {
@@ -787,3 +789,4 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
