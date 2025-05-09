@@ -32,7 +32,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
+    AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +46,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarTrigger, // Import SidebarTrigger
+  SidebarTrigger,
   SidebarInset,
   SidebarMenu,
   SidebarMenuItem,
@@ -154,10 +154,9 @@ function HomePageContent() {
   const [weeklyRecipes, setWeeklyRecipes] = useState<{ [weekStartDate: string]: Recipe[] }>({});
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string>(() => getWeekStartDate(new Date()));
   const [nutritionalAnalysis, setNutritionalAnalysis] = useState<AnalyzeNutritionalBalanceOutput | null>(null);
-  // Removed userPreferences state as it's now handled in the dialog
 
   const [isGeneratePreferencesDialogOpen, setIsGeneratePreferencesDialogOpen] = useState(false);
-  const [generateDialogPreferences, setGenerateDialogPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" }); // Default preference remains
+  const [generateDialogPreferences, setGenerateDialogPreferences] = useState<UserPreferences>({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
 
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [isLoadingGeneration, setIsLoadingGeneration] = useState(false);
@@ -167,7 +166,7 @@ function HomePageContent() {
   const [isClearWeekDialogOpen, setIsClearWeekDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
-  const { state: sidebarState } = useSidebar(); // Get sidebar state
+  const { state: sidebarState } = useSidebar();
 
   useEffect(() => {
     console.log("HomePageContent component mounted on client.");
@@ -242,7 +241,6 @@ function HomePageContent() {
         console.log("Attempting to load data from localStorage.");
        try {
          const storedWeeklyRecipes = localStorage.getItem("nutrijournal_weekly_recipes");
-         // Removed loading preferences from local storage
          if (storedWeeklyRecipes) {
             const parsedRecipes = JSON.parse(storedWeeklyRecipes);
             console.log("Loaded weekly recipes from localStorage:", parsedRecipes);
@@ -250,15 +248,12 @@ function HomePageContent() {
          } else {
              console.log("No weekly recipes found in localStorage.");
          }
-
-         // Set initial dialog preferences (can be default or loaded if needed later)
           setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
-
        } catch (error) {
          console.error("从 localStorage 加载数据时出错:", error);
          toast({
            title: "加载数据出错",
-           description: "无法加载已保存的计划。", // Updated message
+           description: "无法加载已保存的计划。",
            variant: "destructive",
          });
        }
@@ -283,7 +278,6 @@ function HomePageContent() {
      }
   }, [weeklyRecipes, isClient]);
 
-   // Removed useEffect for saving userPreferences to localStorage
 
    useEffect(() => {
       console.log("Current week changed to:", currentWeekStartDate, "Clearing nutritional analysis and estimated price.");
@@ -367,8 +361,6 @@ function HomePageContent() {
 
      setNutritionalAnalysis(null);
      setEstimatedPrice(null);
-     // Do NOT close the dialog here anymore
-    // setIsAddRecipeDialogOpen(false);
     toast({
       title: "餐点已添加",
       description: `${newRecipe.dayOfWeek} ${newRecipe.mealType} 的 ${newRecipe.name} 已添加。您可以继续添加或关闭窗口。`,
@@ -438,7 +430,6 @@ function HomePageContent() {
         });
    }, [currentWeekStartDate, toast, isClient]);
 
-  // Removed handleUpdateAndSavePreferences as preferences are now temporary
 
   const triggerAnalysis = useCallback(async () => {
     if (!isClient) return;
@@ -599,11 +590,9 @@ function HomePageContent() {
          const generatedToAddPromises: Promise<Recipe>[] = result.suggestedRecipes.map(async (genRecipe, index) => {
            const recipeId = `recipe-gen-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 
-           // Use the English day/meal from the response and map it back correctly
-           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0]; // Fallback just in case
-           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0]; // Fallback just in case
+           const displayDay = daysOfWeekChineseMapReverse[genRecipe.dayOfWeek] || daysOfWeek[0];
+           const displayMeal = mealTypesChineseMapReverse[genRecipe.mealType] || mealTypes[0];
 
-           // Validate the generated day and meal against our allowed values
            const validDay = daysOfWeek.includes(displayDay) ? displayDay : daysOfWeek[index % daysOfWeek.length];
            const validMeal = mealTypes.includes(displayMeal) ? displayMeal : mealTypes[Math.floor(index / daysOfWeek.length) % mealTypes.length];
 
@@ -624,8 +613,8 @@ function HomePageContent() {
                                 quantity: Number(ing.quantity) || 0,
                             })),
              weekStartDate: currentWeekStartDate,
-             dayOfWeek: validDay, // Use the validated day
-             mealType: validMeal, // Use the validated meal
+             dayOfWeek: validDay,
+             mealType: validMeal,
              calories: undefined,
              protein: undefined,
              fat: undefined,
@@ -650,7 +639,6 @@ function HomePageContent() {
 
           setWeeklyRecipes((prevWeekly) => {
              console.log(`Adding ${generatedToAdd.length} generated recipes to week:`, currentWeekStartDate);
-             // Add generated recipes, potentially creating duplicates for a slot
              const updatedWeek = [...(prevWeekly[currentWeekStartDate] || []), ...generatedToAdd];
              const newState = { ...prevWeekly, [currentWeekStartDate]: updatedWeek };
              console.log("New weeklyRecipes state after generation:", newState);
@@ -719,17 +707,14 @@ function HomePageContent() {
 
   const openGeneratePreferencesDialog = () => {
     if (!isClient) return;
-    // Reset dialog preferences to default each time it opens
     setGenerateDialogPreferences({ dietaryNeeds: "", preferences: "中餐 (Chinese food)" });
     setIsGeneratePreferencesDialogOpen(true);
   };
 
   const handleGenerateWithPreferences = () => {
     if (!isClient) return;
-    // Use the temporary preferences from the dialog state
     actualGenerateWeeklyRecipesLogic(generateDialogPreferences);
     setIsGeneratePreferencesDialogOpen(false);
-    // Do not save these preferences permanently
     toast({
         title: "正在生成食谱...",
         description: "正在使用您输入的偏好生成餐点建议。",
@@ -744,17 +729,15 @@ function HomePageContent() {
     <>
         <Sidebar variant="sidebar" collapsible="icon" side="left">
         <SidebarHeader>
-           <div className="flex items-center justify-between w-full"> {/* Ensure header takes full width */}
+           <div className="flex items-center justify-between w-full">
             <h2 className="text-lg font-semibold text-primary flex items-center gap-2 group-data-[collapsible=icon]:hidden">
               <Settings2 className="h-5 w-5" /> 操作面板
             </h2>
-             {/* SidebarTrigger moved outside */}
            </div>
         </SidebarHeader>
 
         <SidebarContent>
             <SidebarMenu>
-              {/* Add Meal Dialog */}
               <SidebarMenuItem>
                   <Dialog open={isAddRecipeDialogOpen} onOpenChange={setIsAddRecipeDialogOpen}>
                     <DialogTrigger asChild>
@@ -774,7 +757,7 @@ function HomePageContent() {
                       </DialogHeader>
                       <RecipeInputForm
                         onAddRecipe={handleAddRecipe}
-                        onCloseDialog={() => setIsAddRecipeDialogOpen(false)} // Pass the close handler
+                        onCloseDialog={() => setIsAddRecipeDialogOpen(false)}
                         currentWeekStartDate={currentWeekStartDate}
                         daysOfWeek={daysOfWeek}
                         mealTypes={mealTypes}
@@ -798,12 +781,11 @@ function HomePageContent() {
                   </Dialog>
               </SidebarMenuItem>
 
-              {/* Analyze Nutrition Button */}
               <SidebarMenuItem>
                  <SidebarMenuButton
                      onClick={triggerAnalysis}
                      disabled={!isClient || isLoadingAnalysis || currentWeekRecipes.length === 0}
-                     variant="default" // Changed from direct Button
+                     variant="default"
                      tooltip="分析营养"
                   >
                     {isLoadingAnalysis ? <RefreshCw className="animate-spin" /> : <ListChecks />}
@@ -811,12 +793,11 @@ function HomePageContent() {
                  </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Generate Recipes Button (opens preferences dialog) */}
               <SidebarMenuItem>
                  <SidebarMenuButton
                      onClick={openGeneratePreferencesDialog}
                      disabled={!isClient || isLoadingGeneration}
-                     variant="default" // Changed from direct Button
+                     variant="default"
                      tooltip="生成餐点建议"
                   >
                     {isLoadingGeneration ? <RefreshCw className="animate-spin" /> : <ChefHat />}
@@ -824,12 +805,11 @@ function HomePageContent() {
                  </SidebarMenuButton>
               </SidebarMenuItem>
 
-               {/* Remove All Recipes Button */}
                <SidebarMenuItem>
                   <AlertDialog open={isClearWeekDialogOpen} onOpenChange={setIsClearWeekDialogOpen}>
                     <AlertDialogTrigger asChild>
                       <SidebarMenuButton
-                        variant="destructive" // Changed from direct Button
+                        variant="destructive"
                         disabled={!isClient || currentWeekRecipes.length === 0}
                         tooltip="移除所有餐点"
                        >
@@ -858,7 +838,6 @@ function HomePageContent() {
         </SidebarContent>
 
         <SidebarFooter>
-          {/* Weekly summary is conditionally rendered based on sidebarState */}
           {sidebarState !== 'collapsed' && (
             <>
               <Separator className="my-2" />
@@ -877,7 +856,7 @@ function HomePageContent() {
                           priceErrorMessage="无法估算价格。"
                           quantityLabel="克"
                           currencySymbol="¥"
-                          isSidebarCollapsed={sidebarState === 'collapsed'} // Pass the state
+                          isSidebarCollapsed={sidebarState === 'collapsed'}
                       />
                   )}
               </ClientErrorBoundary>
@@ -886,7 +865,6 @@ function HomePageContent() {
         </SidebarFooter>
       </Sidebar>
 
-        {/* Preferences Dialog for Generation (Remains outside Sidebar) */}
         <Dialog open={isGeneratePreferencesDialogOpen} onOpenChange={setIsGeneratePreferencesDialogOpen}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -914,7 +892,6 @@ function HomePageContent() {
                             value={generateDialogPreferences.preferences || ""}
                             onChange={(e) => setGenerateDialogPreferences(prev => ({ ...prev, preferences: e.target.value }))}
                             className="w-full min-h-[60px]"
-                            className="w-full min-h-[60px]"
                         />
                     </div>
                 </div>
@@ -930,19 +907,14 @@ function HomePageContent() {
         </Dialog>
 
 
-      {/* Main Content Area */}
       <SidebarInset>
-         {/* Reduced horizontal padding */}
         <main className="flex-1 py-4 px-2 md:px-2 lg:px-2 max-w-5xl overflow-y-auto mx-auto">
             <ClientErrorBoundary fallback={<p className="text-red-500">页面标题加载失败。</p>}>
-              {/* Header Section with Sidebar Trigger */}
-              <div className="flex items-center justify-center mb-6 w-full relative"> {/* Added relative positioning */}
-                {/* Sidebar Trigger Button - Positioned on the left */}
+              <div className="flex items-center justify-center mb-6 w-full relative">
                 <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                     <SidebarTrigger className="md:hidden" /> {/* Only show on mobile */}
+                     <SidebarTrigger />
                 </div>
 
-                {/* Week Navigation */}
                 <div className="flex items-center justify-center flex-grow">
                   <Button variant="ghost" size="icon" onClick={goToPreviousWeek} aria-label="上一周 (Previous Week)" disabled={!isClient}>
                     <ArrowLeft className="h-5 w-5" />
@@ -986,7 +958,6 @@ function HomePageContent() {
                 )}
               </ClientErrorBoundary>
 
-              {/* Removed User Preferences Section */}
 
               <ClientErrorBoundary fallback={<p className="text-red-500">营养分析部分加载失败。</p>}>
                 {isClient ? (
@@ -1023,7 +994,7 @@ function HomePageContent() {
 
 export default function Home() {
   return (
-    <SidebarProvider defaultOpen={false}> {/* Changed defaultOpen to false */}
+    <SidebarProvider defaultOpen={false}>
       <HomePageContent />
     </SidebarProvider>
   );
